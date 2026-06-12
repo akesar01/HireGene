@@ -37,3 +37,4 @@ Coming soon. The frontend currently uses mock data in `frontend/src/lib/data.ts`
 - **Frontend:** Next.js 16, React 19, TypeScript, Tailwind CSS 4
 - **Backend:** TBD
 # HireGene
+# HireGene
