@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+:root {
+  --background: #FFF4E1;
+  --foreground: #2d2a26;
+  --muted: #78716c;
+  --muted-light: #a8a29e;
+  --accent: #e85d04;
+  --accent-hover: #d35400;
+  --card-bg: #fffbf5;
+  --card-border: #e7e0d5;
+  --card-shadow: 0 1px 3px rgba(120, 100, 70, 0.06), 0 1px 2px rgba(120, 100, 70, 0.04);
+  --card-shadow-hover: 0 4px 12px rgba(120, 100, 70, 0.1), 0 2px 4px rgba(120, 100, 70, 0.06);
+  --surface: #f5f0e8;
+  --surface-hover: #ede8df;
+  --border: #d6cfc4;
+  --border-light: #ece6db;
+  --upvote: #2d2a26;
+  --downvote: #2d2a26;
+  --tag-green-bg: #e8f5e0;
+  --tag-green-text: #2d5016;
+  --tag-gray-bg: #f0ece4;
+  --tag-gray-text: #44403c;
+  --chip-bg: #f0ece4;
+  --chip-bg-active: #2d2a26;
+  --chip-text: #44403c;
+  --chip-text-active: #FFF4E1;
+  --sidebar-bg: #faf6ee;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-light: var(--muted-light);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-card-bg: var(--card-bg);
+  --color-card-border: var(--card-border);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-border: var(--border);
+  --color-border-light: var(--border-light);
+  --color-upvote: var(--upvote);
+  --color-downvote: var(--downvote);
+  --color-tag-green-bg: var(--tag-green-bg);
+  --color-tag-green-text: var(--tag-green-text);
+  --color-tag-gray-bg: var(--tag-gray-bg);
+  --color-tag-gray-text: var(--tag-gray-text);
+  --color-chip-bg: var(--chip-bg);
+  --color-chip-bg-active: var(--chip-bg-active);
+  --color-chip-text: var(--chip-text);
+  --color-chip-text-active: var(--chip-text-active);
+  --color-sidebar-bg: var(--sidebar-bg);
+  --shadow-card: var(--card-shadow);
+  --shadow-card-hover: var(--card-shadow-hover);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: var(--accent);
+  color: #fff8f0;
+}
+
+/* Smooth global transitions */
+a, button {
+  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Focus ring */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
