@@ -1,5 +1,5 @@
 import {
-  jobs,
+  jobs as mockJobs,
   filterJobs,
   sortJobs,
   SORT_OPTIONS,
@@ -7,7 +7,9 @@ import {
   type SortOption,
   type SourceFilter,
   type FilterParams,
+  type Job,
 } from "@/lib/data";
+import { fetchJobs } from "@/lib/api";
 import Sidebar from "@/components/Sidebar";
 import JobCard from "@/components/JobCard";
 import Link from "next/link";
@@ -56,44 +58,74 @@ export default async function Home({
     stack,
   };
 
-  const results = sortJobs(filterJobs(jobs, filters), sort);
+  let allJobs: Job[];
+  try {
+    allJobs = await fetchJobs(sort, filters);
+  } catch {
+    allJobs = mockJobs;
+  }
+
+  const results = sortJobs(filterJobs(allJobs, filters), sort);
 
   return (
     <div className="min-h-screen">
       {/* ── Header ── */}
-      <header className="px-6 py-6 max-w-7xl mx-auto">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link href="/">
-              <h1 className="text-xl font-bold text-foreground">
-                jobs in the wild.
-              </h1>
-            </Link>
-            <span className="hidden sm:inline text-xs text-muted uppercase tracking-wide">
-              linkedin &amp; x hiring posts — curated by community
+      <header className="border-b border-card-border bg-card-bg sticky top-0 z-10">
+        <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2">
+            <span className="text-lg font-bold text-foreground tracking-tight">HireGene</span>
+            <span className="hidden sm:inline text-xs text-muted">— jobs in the wild</span>
+          </Link>
+          <div className="flex items-center gap-4">
+            <span className="text-xs text-muted hidden sm:inline">
+              <span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1.5 align-middle" />
+              {results.length} live jobs
             </span>
+            <Link
+              href="/submit"
+              className="inline-flex items-center gap-1 bg-accent text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-accent-hover transition-colors"
+            >
+              + submit
+            </Link>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-muted-light hidden sm:inline">
-              ● 2,517 people here now
+        </div>
+      </header>
+
+      {/* ── Hero pitch ── */}
+      <section className="bg-card-bg border-b border-card-border">
+        <div className="max-w-6xl mx-auto px-6 py-10 sm:py-14">
+          <h1 className="text-3xl sm:text-4xl font-bold text-foreground tracking-tight max-w-3xl leading-tight">
+            The best tech jobs aren&apos;t on job boards.
+            <br />
+            <span className="text-accent">They&apos;re hiding in LinkedIn posts.</span>
+          </h1>
+          <p className="mt-4 text-base text-muted max-w-2xl leading-relaxed">
+            We watch real hiring managers — founders, VPs, team leads — across LinkedIn and X.
+            Every post they make gets captured here before it vanishes.
+            No recruiters. No job boards. Just real jobs from the people actually hiring.
+          </p>
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            <a
+              href="#feed"
+              className="inline-flex items-center gap-1.5 bg-foreground text-white text-sm font-semibold px-5 py-2.5 rounded-lg hover:bg-foreground/90 transition-colors"
+            >
+              Browse jobs
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+              </svg>
+            </a>
+            <span className="text-xs text-muted-light">
+              🗳️ Community-ranked · ⏰ Auto-expires in 7 days · 🔗 Always links to source
             </span>
           </div>
         </div>
-
-        {/* Tagline */}
-        <h2 className="mt-4 text-2xl sm:text-3xl font-bold text-foreground leading-tight max-w-3xl">
-          the place for hiring posts aggregated across linkedin and twitter from real bosses.
-        </h2>
-        <p className="mt-2 text-sm text-muted">
-          upvote the good ones. downvote the spam.
-        </p>
-      </header>
+      </section>
 
       {/* ── Main content ── */}
-      <div className="max-w-7xl mx-auto px-6 pb-12">
+      <div className="max-w-6xl mx-auto px-6 py-8" id="feed">
         {/* Filters row */}
         <section className="mb-6" aria-label="Filters">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-4">
             <Sidebar
               currentSort={sort}
               currentSource={source}
@@ -101,13 +133,8 @@ export default async function Home({
               currentSeniority={seniority}
               currentRemoteMode={remoteMode}
               currentStack={stack}
+              jobs={results}
             />
-            <Link
-              href="/submit"
-              className="shrink-0 ml-4 inline-flex items-center gap-1 bg-accent text-white text-sm font-semibold px-5 py-2.5 rounded hover:bg-accent-hover transition-colors"
-            >
-              + add a job
-            </Link>
           </div>
         </section>
 
@@ -133,84 +160,59 @@ export default async function Home({
 
           {/* Right: Info sidebar */}
           <aside className="hidden lg:block w-72 shrink-0">
-            <div className="sticky top-6 space-y-5">
-              {/* Why this exists */}
-              <div className="bg-sidebar-bg border border-card-border rounded-lg p-5 shadow-card">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-foreground mb-3">
-                  Why This Exists
-                </h3>
-                <div className="space-y-2 text-[13px] text-muted leading-relaxed">
-                  <p>
-                    the best jobs in tech aren&apos;t on job boards. they&apos;re
-                    in posts written by founders, vps, and team leads who are
-                    actually hiring, and most of those posts vanish in a day.
-                  </p>
-                  <p>we collect them here. that&apos;s it.</p>
-                  <p className="text-muted-light">
-                    posts auto-expire after 7 days. fresh stuff only.
-                  </p>
+            <div className="sticky top-20 space-y-4">
+              {/* Stats card */}
+              <div className="bg-card-bg border border-card-border rounded-xl p-5 shadow-card">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-2xl font-bold text-foreground">{results.length}</p>
+                    <p className="text-xs text-muted">live jobs</p>
+                  </div>
+                  <div className="w-10 h-10 rounded-lg bg-accent-light flex items-center justify-center">
+                    <svg className="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                  </div>
                 </div>
               </div>
 
-              {/* Upvote if */}
-              <div className="bg-sidebar-bg border border-card-border rounded-lg p-5 shadow-card">
+              {/* How it works */}
+              <div className="bg-card-bg border border-card-border rounded-xl p-5 shadow-card">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-foreground mb-3">
-                  Upvote ▲ If
+                  How it works
                 </h3>
-                <ul className="space-y-2 text-[13px] text-muted leading-relaxed">
-                  <li className="flex items-start gap-2">
-                    <span className="text-accent mt-0.5">•</span>
-                    <span>the poster is the <strong className="text-foreground">actual hiring manager</strong> (founder, head, lead, the person you&apos;d dm)</span>
+                <ul className="space-y-3 text-[13px] text-muted leading-relaxed">
+                  <li className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-accent-light text-accent flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">1</span>
+                    <span>We monitor <strong className="text-foreground">real hiring managers</strong> on LinkedIn &amp; X</span>
                   </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-accent mt-0.5">•</span>
-                    <span>the role is clear: what, where, what they want</span>
+                  <li className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-accent-light text-accent flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">2</span>
+                    <span>Every post is captured with a direct link to the original</span>
                   </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-accent mt-0.5">•</span>
-                    <span>you&apos;d reply if you fit</span>
+                  <li className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-accent-light text-accent flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">3</span>
+                    <span>You upvote real jobs, downvote spam. Community decides.</span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-accent-light text-accent flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">4</span>
+                    <span>Posts auto-expire after 7 days. Fresh stuff only.</span>
                   </li>
                 </ul>
               </div>
 
-              {/* Downvote if */}
-              <div className="bg-sidebar-bg border border-card-border rounded-lg p-5 shadow-card">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-foreground mb-3">
-                  Downvote ▼ If
-                </h3>
-                <ul className="space-y-2 text-[13px] text-muted leading-relaxed">
-                  <li className="flex items-start gap-2">
-                    <span className="text-muted-light mt-0.5">•</span>
-                    <span>recruiter / agency spam (&quot;hiring for 10 companies, send resume&quot;)</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-muted-light mt-0.5">•</span>
-                    <span>a quote-post of someone else&apos;s role</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-muted-light mt-0.5">•</span>
-                    <span>generic &quot;we&apos;re hiring for 50 roles&quot; with no specifics</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-muted-light mt-0.5">•</span>
-                    <span>the post is older than two weeks</span>
-                  </li>
-                </ul>
-              </div>
-
-              {/* The Mission */}
-              <div className="bg-sidebar-bg border border-card-border rounded-lg p-5 shadow-card">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-foreground mb-3">
-                  The Mission
-                </h3>
-                <div className="space-y-2 text-[13px] text-muted leading-relaxed">
-                  <p>
-                    posts by bosses on linkedin and twitter are the only ones that
-                    get you the best jobs. this is a community-run product, your
-                    votes decide what stays at the top.
-                  </p>
-                  <p className="text-muted-light mt-3">team tal</p>
-                </div>
+              {/* CTA card */}
+              <div className="bg-gradient-to-br from-accent to-[#ff8c42] rounded-xl p-5 text-white shadow-card">
+                <h3 className="text-sm font-bold mb-1">Know a hiring manager?</h3>
+                <p className="text-xs text-white/90 leading-relaxed mb-3">
+                  Submit their LinkedIn or X profile and we&apos;ll start tracking their posts.
+                </p>
+                <Link
+                  href="/submit"
+                  className="inline-flex items-center gap-1 bg-white text-accent text-xs font-semibold px-3 py-2 rounded-lg hover:bg-white/90 transition-colors"
+                >
+                  + add a recruiter
+                </Link>
               </div>
             </div>
           </aside>

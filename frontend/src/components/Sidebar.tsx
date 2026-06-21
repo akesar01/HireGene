@@ -1,13 +1,17 @@
 import {
-  jobs,
   getTagCounts,
   SORT_OPTIONS,
   SOURCE_OPTIONS,
   type SortOption,
   type SourceFilter,
   type TagCount,
+  type Job,
 } from "@/lib/data";
 import FilterPill from "./FilterPill";
+
+function formatLabel(value: string): string {
+  return value.replace(/_/g, "-");
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -18,6 +22,7 @@ interface SidebarProps {
   currentSeniority: string;
   currentRemoteMode: string;
   currentStack: string;
+  jobs: Job[];
 }
 
 interface FilterState {
@@ -65,7 +70,7 @@ function FilterGroup({
       {items.map(({ value, count }) => (
         <FilterPill
           key={value}
-          label={value}
+          label={formatLabel(value)}
           count={count}
           href={buildHref(state, filterKey, value)}
           active={currentValue === value}
@@ -84,6 +89,7 @@ export default function Sidebar({
   currentSeniority,
   currentRemoteMode,
   currentStack,
+  jobs,
 }: SidebarProps) {
   const state: FilterState = {
     sort: currentSort,

@@ -15,6 +15,7 @@ export interface Job {
   company: string;
   author: string;
   authorTitle: string;
+  authorAvatar?: string | null;
   roleBadge: string;
   source: Source;
   sourceUrl: string;
@@ -23,8 +24,8 @@ export interface Job {
   remoteMode: RemoteMode;
   stack: TechStack[];
   description: string[];
-  score: number;
   comments: number;
+  score: number;
   postedAt: string;
 }
 
@@ -117,8 +118,7 @@ export const jobs: Job[] = [
       "Strong C/C++ development skills",
       "Experience with RDBMS kernels or storage engines...",
     ],
-    score: 8,
-    comments: 1,
+    comments: 1, score: 1,
     postedAt: "2026-06-11T10:00:00Z",
   },
   {
@@ -138,8 +138,7 @@ export const jobs: Job[] = [
       "My team at Salesforce is actively looking for Senior Member of Technical Staff (SMTS) engineers for our Hyderabad office.",
       "What we're looking for:",
     ],
-    score: 6,
-    comments: 1,
+    comments: 1, score: 1,
     postedAt: "2026-06-11T08:00:00Z",
   },
   {
@@ -159,8 +158,7 @@ export const jobs: Job[] = [
       "We are looking for a Senior Node.js Backend Developer",
       "Helping FMCG, Plastics, Hardware & Electrical Distributors replace WhatsApp + Register + Excel",
     ],
-    score: 4,
-    comments: 0,
+    comments: 0, score: 0,
     postedAt: "2026-06-11T06:00:00Z",
   },
   {
@@ -180,8 +178,7 @@ export const jobs: Job[] = [
       "Building something big in fintech. Need a 0→1 generalist who can own the stack.",
       "Strong systems thinking, can ship fast, and has startup DNA.",
     ],
-    score: 31,
-    comments: 5,
+    comments: 5, score: 5,
     postedAt: "2026-06-12T06:00:00Z",
   },
   {
@@ -201,8 +198,7 @@ export const jobs: Job[] = [
       "Looking for a Design Lead to own the consumer experience for our food delivery product.",
       "5+ years in product design, strong systems thinking.",
     ],
-    score: 12,
-    comments: 2,
+    comments: 2, score: 2,
     postedAt: "2026-06-11T14:00:00Z",
   },
   {
@@ -222,8 +218,7 @@ export const jobs: Job[] = [
       "Hiring data analyst interns. Must know SQL and Python.",
       "Bonus: experience with dashboarding tools (Metabase, Looker).",
     ],
-    score: 8,
-    comments: 3,
+    comments: 3, score: 3,
     postedAt: "2026-06-11T10:00:00Z",
   },
   {
@@ -243,8 +238,7 @@ export const jobs: Job[] = [
       "Own CAC optimization and paid acquisition across Google, Meta, and programmatic.",
       "3+ years in performance marketing at a consumer startup.",
     ],
-    score: 10,
-    comments: 0,
+    comments: 0, score: 0,
     postedAt: "2026-06-10T20:00:00Z",
   },
   {
@@ -264,8 +258,7 @@ export const jobs: Job[] = [
       "Looking for backend engineers to join our payments team.",
       "Strong Java fundamentals. Experience with distributed systems is a plus.",
     ],
-    score: 14,
-    comments: 2,
+    comments: 2, score: 2,
     postedAt: "2026-06-11T22:00:00Z",
   },
   {
@@ -285,8 +278,7 @@ export const jobs: Job[] = [
       "Building LLM-powered search and recommendation systems at scale.",
       "Experience with transformer architectures and vector databases required.",
     ],
-    score: 18,
-    comments: 4,
+    comments: 4, score: 4,
     postedAt: "2026-06-12T02:00:00Z",
   },
   {
@@ -306,8 +298,7 @@ export const jobs: Job[] = [
       "Own our RAG pipeline end-to-end. Chunking, embedding, retrieval, re-ranking.",
       "Must have production RAG experience. Not just tutorials.",
     ],
-    score: 22,
-    comments: 3,
+    comments: 3, score: 3,
     postedAt: "2026-06-12T01:00:00Z",
   },
   {
@@ -327,8 +318,7 @@ export const jobs: Job[] = [
       "Join the team building Zomato's merchant-facing products.",
       "React + Node.js. We move fast and ship weekly.",
     ],
-    score: 19,
-    comments: 1,
+    comments: 1, score: 1,
     postedAt: "2026-06-11T16:00:00Z",
   },
   {
@@ -348,8 +338,7 @@ export const jobs: Job[] = [
       "Looking for a PM to own the payments experience.",
       "You should obsess over UX details and understand money movement.",
     ],
-    score: 15,
-    comments: 2,
+    comments: 2, score: 2,
     postedAt: "2026-06-11T18:00:00Z",
   },
   {
@@ -369,8 +358,7 @@ export const jobs: Job[] = [
       "Work directly with me on strategic initiatives across our global expansion.",
       "MBA or consulting background preferred. Must be a doer, not just a thinker.",
     ],
-    score: 27,
-    comments: 6,
+    comments: 6, score: 6,
     postedAt: "2026-06-12T05:00:00Z",
   },
   {
@@ -390,8 +378,7 @@ export const jobs: Job[] = [
       "Building the next generation of payment dashboards.",
       "Strong React, TypeScript. Experience with design systems is a plus.",
     ],
-    score: 24,
-    comments: 3,
+    comments: 3, score: 3,
     postedAt: "2026-06-12T04:00:00Z",
   },
   {
@@ -411,8 +398,7 @@ export const jobs: Job[] = [
       "Help us tell the Notion story to developers and creators in India.",
       "Strong portfolio required. Bonus if you've written for SaaS/dev tools.",
     ],
-    score: 6,
-    comments: 1,
+    comments: 1, score: 1,
     postedAt: "2026-06-10T12:00:00Z",
   },
   {
@@ -432,8 +418,7 @@ export const jobs: Job[] = [
       "Own brand strategy and communications for our beauty vertical.",
       "5+ years in brand marketing. Consumer brand experience required.",
     ],
-    score: 11,
-    comments: 0,
+    comments: 0, score: 0,
     postedAt: "2026-06-11T09:00:00Z",
   },
   {
@@ -453,8 +438,7 @@ export const jobs: Job[] = [
       "Manage last-mile delivery operations across South India.",
       "Experience with logistics tech and fleet management required.",
     ],
-    score: 5,
-    comments: 0,
+    comments: 0, score: 0,
     postedAt: "2026-06-10T08:00:00Z",
   },
   {
@@ -474,8 +458,7 @@ export const jobs: Job[] = [
       "Build our people function from scratch. 300+ employees, scaling to 500.",
       "You'll own hiring, culture, L&D, and employee experience.",
     ],
-    score: 9,
-    comments: 1,
+    comments: 1, score: 1,
     postedAt: "2026-06-10T15:00:00Z",
   },
   {
@@ -495,8 +478,7 @@ export const jobs: Job[] = [
       "Own CI/CD pipelines and infrastructure for our Bangalore team.",
       "K8s, Terraform, and strong Linux fundamentals required.",
     ],
-    score: 16,
-    comments: 2,
+    comments: 2, score: 2,
     postedAt: "2026-06-11T20:00:00Z",
   },
   {
@@ -516,8 +498,7 @@ export const jobs: Job[] = [
       "Research internship focusing on multi-modal models.",
       "Currently pursuing MS/PhD in CS with publications in top venues.",
     ],
-    score: 35,
-    comments: 8,
+    comments: 8, score: 8,
     postedAt: "2026-06-12T07:00:00Z",
   },
 ];
@@ -557,14 +538,10 @@ export function sortJobs(jobList: Job[], sort: SortOption): Job[] {
 
     case "hot":
     default: {
-      const now = Date.now();
-      return sorted.sort((a, b) => {
-        const ageA = (now - new Date(a.postedAt).getTime()) / HOURS_MS;
-        const ageB = (now - new Date(b.postedAt).getTime()) / HOURS_MS;
-        const hotA = a.score / Math.pow(ageA + 2, 1.5);
-        const hotB = b.score / Math.pow(ageB + 2, 1.5);
-        return hotB - hotA;
-      });
+      // hot = score first, then recency
+      return sorted.sort(
+        (a, b) => b.score - a.score || new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime()
+      );
     }
   }
 }
