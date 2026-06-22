@@ -1,13 +1,13 @@
+import Link from "next/link";
 import {
   getTagCounts,
-  SORT_OPTIONS,
   SOURCE_OPTIONS,
-  type SortOption,
   type SourceFilter,
   type TagCount,
   type Job,
 } from "@/lib/data";
-import FilterPill from "./FilterPill";
+import FilterRadio from "./FilterRadio";
+import CompanySearch from "./CompanySearch";
 
 function formatLabel(value: string): string {
   return value.replace(/_/g, "-");
@@ -16,63 +16,47 @@ function formatLabel(value: string): string {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface SidebarProps {
-  currentSort: SortOption;
   currentSource: SourceFilter;
   currentRoleFamily: string;
   currentSeniority: string;
   currentRemoteMode: string;
   currentStack: string;
+  currentCompany: string;
   jobs: Job[];
-}
-
-interface FilterState {
-  sort: string;
-  source: string;
-  role_family: string;
-  seniority: string;
-  remote_mode: string;
-  stack: string;
-}
-
-// ─── URL Builder ──────────────────────────────────────────────────────────────
-
-function buildHref(state: FilterState, key: string, value: string): string {
-  const params = new URLSearchParams();
-
-  for (const [k, v] of Object.entries(state)) {
-    if (k === key) {
-      // Toggle: same value = deselect, different = select
-      if (v !== value) params.set(k, value);
-    } else if (v) {
-      params.set(k, v);
-    }
-  }
-
-  const qs = params.toString();
-  return qs ? `/?${qs}` : "/";
+  buildHref: (key: string, value: string) => string;
 }
 
 // ─── Filter Group ─────────────────────────────────────────────────────────────
 
 function FilterGroup({
+  title,
   items,
   filterKey,
   currentValue,
-  state,
+  buildHref,
 }: {
+  title: string;
   items: TagCount[];
   filterKey: string;
   currentValue: string;
-  state: FilterState;
+  buildHref: (key: string, value: string) => string;
 }) {
   return (
-    <div className="flex flex-wrap gap-1" role="group">
+    <div className="space-y-0.5">
+      <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-light px-2 mb-1">
+        {title}
+      </h3>
+      <FilterRadio
+        label="All"
+        href={buildHref(filterKey, "")}
+        active={!currentValue}
+      />
       {items.map(({ value, count }) => (
-        <FilterPill
+        <FilterRadio
           key={value}
           label={formatLabel(value)}
           count={count}
-          href={buildHref(state, filterKey, value)}
+          href={buildHref(filterKey, value)}
           active={currentValue === value}
         />
       ))}
@@ -83,56 +67,106 @@ function FilterGroup({
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Sidebar({
-  currentSort,
   currentSource,
   currentRoleFamily,
   currentSeniority,
   currentRemoteMode,
   currentStack,
+  currentCompany,
   jobs,
+  buildHref,
 }: SidebarProps) {
-  const state: FilterState = {
-    sort: currentSort,
-    source: currentSource !== "all" ? currentSource : "",
-    role_family: currentRoleFamily,
-    seniority: currentSeniority,
-    remote_mode: currentRemoteMode,
-    stack: currentStack,
-  };
-
   const roleCounts = getTagCounts(jobs, "roleFamily");
   const seniorityCounts = getTagCounts(jobs, "seniority");
   const remoteModeCounts = getTagCounts(jobs, "remoteMode");
   const stackCounts = getTagCounts(jobs, "stack");
 
+  const hasActiveFilters =
+    !!currentRoleFamily || !!currentSeniority || !!currentRemoteMode || !!currentStack || !!currentCompany || currentSource !== "all";
+
   return (
-    <nav className="space-y-3" aria-label="Job filters">
-      {/* Sort + Source */}
-      <div className="flex flex-wrap gap-1.5 items-center" role="group" aria-label="Sort and source">
-        {SORT_OPTIONS.map((s) => (
-          <FilterPill
+    <nav className="space-y-5" aria-label="Job filters">
+      {/* Company search */}
+      <CompanySearch currentCompany={currentCompany} />
+
+      <div className="border-t border-card-border" />
+
+      {/* Source */}
+      <div className="space-y-0.5">
+        <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-light px-2 mb-1">
+          Source
+        </h3>
+        <FilterRadio
+          label="All"
+          href={buildHref("source", "")}
+          active={currentSource === "all"}
+        />
+        {SOURCE_OPTIONS.filter((s) => s !== "all").map((s) => (
+          <FilterRadio
             key={s}
             label={s}
-            href={buildHref(state, "sort", s)}
-            active={currentSort === s}
-          />
-        ))}
-        <span className="mx-1 text-border select-none" aria-hidden="true">|</span>
-        {SOURCE_OPTIONS.map((s) => (
-          <FilterPill
-            key={s}
-            label={s}
-            href={buildHref(state, "source", s === "all" ? "" : s)}
+            href={buildHref("source", s)}
             active={currentSource === s}
           />
         ))}
       </div>
 
-      {/* Faceted filters */}
-      <FilterGroup items={roleCounts} filterKey="role_family" currentValue={currentRoleFamily} state={state} />
-      <FilterGroup items={seniorityCounts} filterKey="seniority" currentValue={currentSeniority} state={state} />
-      <FilterGroup items={remoteModeCounts} filterKey="remote_mode" currentValue={currentRemoteMode} state={state} />
-      <FilterGroup items={stackCounts} filterKey="stack" currentValue={currentStack} state={state} />
+      <div className="border-t border-card-border" />
+
+      {/* Role Family */}
+      <FilterGroup
+        title="Role"
+        items={roleCounts}
+        filterKey="role_family"
+        currentValue={currentRoleFamily}
+        buildHref={buildHref}
+      />
+
+      <div className="border-t border-card-border" />
+
+      {/* Seniority */}
+      <FilterGroup
+        title="Experience"
+        items={seniorityCounts}
+        filterKey="seniority"
+        currentValue={currentSeniority}
+        buildHref={buildHref}
+      />
+
+      <div className="border-t border-card-border" />
+
+      {/* Remote Mode */}
+      <FilterGroup
+        title="Work Mode"
+        items={remoteModeCounts}
+        filterKey="remote_mode"
+        currentValue={currentRemoteMode}
+        buildHref={buildHref}
+      />
+
+      <div className="border-t border-card-border" />
+
+      {/* Tech Stack */}
+      <FilterGroup
+        title="Tech Stack"
+        items={stackCounts}
+        filterKey="stack"
+        currentValue={currentStack}
+        buildHref={buildHref}
+      />
+
+      {/* Clear all */}
+      {hasActiveFilters && (
+        <>
+          <div className="border-t border-card-border" />
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1 text-xs text-accent hover:text-accent-hover font-medium px-2"
+          >
+            ✕ Clear all filters
+          </Link>
+        </>
+      )}
     </nav>
   );
 }

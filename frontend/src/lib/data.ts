@@ -35,6 +35,7 @@ export interface FilterParams {
   seniority: string;
   remoteMode: string;
   stack: string;
+  company: string;
 }
 
 export interface TagCount {
@@ -553,6 +554,7 @@ export function filterJobs(jobList: Job[], filters: FilterParams): Job[] {
     if (filters.seniority && job.seniority !== filters.seniority) return false;
     if (filters.remoteMode && job.remoteMode !== filters.remoteMode) return false;
     if (filters.stack && !(job.stack as string[]).includes(filters.stack)) return false;
+    if (filters.company && !job.company.toLowerCase().includes(filters.company.toLowerCase())) return false;
     return true;
   });
 }

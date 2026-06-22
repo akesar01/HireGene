@@ -31,15 +31,17 @@ posts.get("/recent", async (c) => {
   const remoteMode = c.req.query("remote_mode");
   const stack = c.req.query("stack");
   const source = c.req.query("source");
+  const company = c.req.query("company");
 
   const where = {
-    // TODO: Re-enable 7-day expiry filter once we have fresh posts
+    // TODO: Re-enable 30-day expiry filter once we have fresh posts
     // expiresAt: { gt: new Date() },
     ...(roleFamily ? { roleFamily: mapToEnum(roleFamily) as never } : {}),
     ...(seniority ? { seniority: mapToEnum(seniority) as never } : {}),
     ...(remoteMode ? { remoteMode: mapToEnum(remoteMode) as never } : {}),
     ...(stack ? { stack: { has: mapToEnum(stack) as never } } : {}),
     ...(source ? { source: mapToEnum(source) as never } : {}),
+    ...(company ? { company: { contains: company, mode: "insensitive" as const } } : {}),
   };
 
   const orderBy =

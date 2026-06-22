@@ -1,3 +1,5 @@
+import { JOB_EXPIRY_DAYS } from "./lib/config";
+
 const openApiSpec = {
   openapi: "3.0.0",
   info: {
@@ -196,8 +198,8 @@ const openApiSpec = {
         summary: "Clear jobs from the database",
         security: [{ AdminAuth: [] }],
         parameters: [
-          { name: "mode", in: "query", schema: { type: "string", enum: ["expired", "all", "olderThan"] }, description: "Clear mode (default: expired — only deletes jobs past their 7-day expiry)" },
-          { name: "olderThanDays", in: "query", schema: { type: "integer" }, description: "Days threshold for olderThan mode (default: 7)" },
+          { name: "mode", in: "query", schema: { type: "string", enum: ["expired", "all", "olderThan"] }, description: `Clear mode (default: expired — only deletes jobs past their ${JOB_EXPIRY_DAYS}-day expiry)` },
+          { name: "olderThanDays", in: "query", schema: { type: "integer" }, description: `Days threshold for olderThan mode (default: ${JOB_EXPIRY_DAYS})` },
         ],
         responses: {
           "200": { description: "Jobs cleared", content: { "application/json": { schema: { type: "object", properties: { deleted: { type: "integer" }, mode: { type: "string" }, description: { type: "string" } } } } } },

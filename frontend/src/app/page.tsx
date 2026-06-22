@@ -10,7 +10,9 @@ import {
   type Job,
 } from "@/lib/data";
 import { fetchJobs } from "@/lib/api";
+import { JOB_EXPIRY_DAYS } from "@/lib/config";
 import Sidebar from "@/components/Sidebar";
+import SortTabs from "@/components/SortTabs";
 import JobCard from "@/components/JobCard";
 import Link from "next/link";
 
@@ -34,6 +36,31 @@ function parseString(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
+interface FilterState {
+  sort: string;
+  source: string;
+  role_family: string;
+  seniority: string;
+  remote_mode: string;
+  stack: string;
+  company: string;
+}
+
+function makeBuildHref(state: FilterState) {
+  return (key: string, value: string): string => {
+    const params = new URLSearchParams();
+    for (const [k, v] of Object.entries(state)) {
+      if (k === key) {
+        if (v !== value) params.set(k, value);
+      } else if (v) {
+        params.set(k, v);
+      }
+    }
+    const qs = params.toString();
+    return qs ? `/?${qs}` : "/";
+  };
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function Home({
@@ -49,6 +76,7 @@ export default async function Home({
   const seniority = parseString(params.seniority);
   const remoteMode = parseString(params.remote_mode);
   const stack = parseString(params.stack);
+  const company = parseString(params.company);
 
   const filters: FilterParams = {
     source,
@@ -56,6 +84,7 @@ export default async function Home({
     seniority,
     remoteMode,
     stack,
+    company,
   };
 
   let allJobs: Job[];
@@ -67,11 +96,22 @@ export default async function Home({
 
   const results = sortJobs(filterJobs(allJobs, filters), sort);
 
+  const filterState: FilterState = {
+    sort,
+    source: source !== "all" ? source : "",
+    role_family: roleFamily,
+    seniority,
+    remote_mode: remoteMode,
+    stack,
+    company,
+  };
+  const buildHref = makeBuildHref(filterState);
+
   return (
     <div className="min-h-screen">
       {/* ── Header ── */}
       <header className="border-b border-card-border bg-card-bg sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
             <span className="text-lg font-bold text-foreground tracking-tight">HireGene</span>
             <span className="hidden sm:inline text-xs text-muted">— jobs in the wild</span>
@@ -93,7 +133,7 @@ export default async function Home({
 
       {/* ── Hero pitch ── */}
       <section className="bg-card-bg border-b border-card-border">
-        <div className="max-w-6xl mx-auto px-6 py-10 sm:py-14">
+        <div className="max-w-7xl mx-auto px-6 py-10 sm:py-14">
           <h1 className="text-3xl sm:text-4xl font-bold text-foreground tracking-tight max-w-3xl leading-tight">
             The best tech jobs aren&apos;t on job boards.
             <br />
@@ -115,32 +155,38 @@ export default async function Home({
               </svg>
             </a>
             <span className="text-xs text-muted-light">
-              🗳️ Community-ranked · ⏰ Auto-expires in 7 days · 🔗 Always links to source
+              🗳️ Community-ranked · ⏰ Auto-expires in {JOB_EXPIRY_DAYS} days · 🔗 Always links to source
             </span>
           </div>
         </div>
       </section>
 
       {/* ── Main content ── */}
-      <div className="max-w-6xl mx-auto px-6 py-8" id="feed">
-        {/* Filters row */}
-        <section className="mb-6" aria-label="Filters">
-          <div className="flex items-center justify-between mb-4">
-            <Sidebar
-              currentSort={sort}
-              currentSource={source}
-              currentRoleFamily={roleFamily}
-              currentSeniority={seniority}
-              currentRemoteMode={remoteMode}
-              currentStack={stack}
-              jobs={results}
-            />
-          </div>
-        </section>
+      <div className="max-w-7xl mx-auto px-6 py-6" id="feed">
+        {/* Sort tabs */}
+        <div className="mb-6">
+          <SortTabs currentSort={sort} buildHref={buildHref} />
+        </div>
 
-        {/* 2-column: Feed + Sidebar */}
-        <div className="flex gap-8">
-          {/* Left: Feed */}
+        {/* 3-column: Filters + Feed + Info */}
+        <div className="flex gap-6">
+          {/* Left: Filter sidebar */}
+          <aside className="hidden md:block w-56 shrink-0">
+            <div className="sticky top-20 bg-card-bg border border-card-border rounded-xl p-4 shadow-card max-h-[calc(100vh-6rem)] overflow-y-auto">
+              <Sidebar
+                currentSource={source}
+                currentRoleFamily={roleFamily}
+                currentSeniority={seniority}
+                currentRemoteMode={remoteMode}
+                currentStack={stack}
+                currentCompany={company}
+                jobs={results}
+                buildHref={buildHref}
+              />
+            </div>
+          </aside>
+
+          {/* Center: Feed */}
           <main className="flex-1 min-w-0" aria-label="Job listings">
             {results.length > 0 ? (
               <div className="space-y-4">
@@ -196,7 +242,7 @@ export default async function Home({
                   </li>
                   <li className="flex items-start gap-2.5">
                     <span className="w-5 h-5 rounded-full bg-accent-light text-accent flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">4</span>
-                    <span>Posts auto-expire after 7 days. Fresh stuff only.</span>
+                    <span>Posts auto-expire after {JOB_EXPIRY_DAYS} days. Fresh stuff only.</span>
                   </li>
                 </ul>
               </div>

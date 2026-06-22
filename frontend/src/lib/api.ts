@@ -20,6 +20,7 @@ function buildQueryString(
   if (filters.remoteMode) params.set("remote_mode", filters.remoteMode);
   if (filters.stack) params.set("stack", filters.stack);
   if (filters.source !== "all") params.set("source", filters.source);
+  if (filters.company) params.set("company", filters.company);
   return params.toString();
 }
 

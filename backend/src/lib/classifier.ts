@@ -13,6 +13,17 @@ const HIRING_PATTERNS = [
   /\bactively (hiring|recruiting)\b/i,
   /\bI'?m hiring\b/i,
   /\bwe'?re hiring\b/i,
+  // Indirect hiring language
+  /\bstrong (opening|role|candidate)\b/i,
+  /\bthis (role|position) (stands out|is tied|sits on|focuses on)\b/i,
+  /\brole (sits on|stands out|focuses on|is tied to)\b/i,
+  /\b(engineer|developer|designer|manager|analyst|intern|lead|head) who (will|can|wants to)\b/i,
+  /\bknow someone who\b/i,
+  /\bbasic qualifications\b/i,
+  /\bpreferred qualifications\b/i,
+  /\bresponsibilities include\b/i,
+  /\byears of (software development|experience|technical support|engineering)\b/i,
+  /\bwe are responsible for building technologies\b/i,
 ];
 
 const NON_HIRING_PATTERNS = [

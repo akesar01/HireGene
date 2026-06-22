@@ -1,17 +1,10 @@
 import { createHash } from "crypto";
 import { prisma } from "./prisma";
-import {
-  isJobPost,
-  extractTitle,
-  extractRoleFamily,
-  extractSeniority,
-  extractRemoteMode,
-  extractTechStack,
-  extractDescription,
-} from "./classifier";
+import { classifyPost } from "./llm-classifier";
+import { JOB_EXPIRY_DAYS } from "./config";
 
 const ACTOR_ID = "atomus~linkedin-posts-scraper-pro";
-const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+const EXPIRY_MS = JOB_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
 const MAX_POSTS = 5; // Only scrape the 5 most recent posts
 
 function sleep(ms: number): Promise<void> {
@@ -105,7 +98,7 @@ export async function scrapeRecruiter(recruiter: {
       body: JSON.stringify({
         profiles: [recruiter.linkedinUrl],
         maxPosts: MAX_POSTS,
-        postedAfterDate: new Date(Date.now() - SEVEN_DAYS_MS).toISOString().split("T")[0],
+        postedAfterDate: new Date(Date.now() - EXPIRY_MS).toISOString().split("T")[0],
         sortBy: "date",
         includeSharedPosts: true,
         includeReposts: true,
@@ -175,7 +168,17 @@ export async function scrapeRecruiter(recruiter: {
     const rawText = post.text ?? post.content ?? "";
     const sourceUrl = post.url ?? post.post_url ?? "";
 
-    if (!sourceUrl || !isJobPost(rawText)) {
+    if (!sourceUrl) {
+      jobsSkipped++;
+      continue;
+    }
+
+    const authorHeadline = post.author?.headline ?? "";
+
+    // LLM classification (falls back to regex if no API key or LLM fails)
+    const classification = await classifyPost(rawText, authorHeadline);
+
+    if (!classification.isJobPost) {
       jobsSkipped++;
       continue;
     }
@@ -190,14 +193,14 @@ export async function scrapeRecruiter(recruiter: {
       : postedDateStr
         ? new Date(postedDateStr)
         : new Date();
-    const expiresAt = new Date(postedDate.getTime() + SEVEN_DAYS_MS);
+    const expiresAt = new Date(postedDate.getTime() + EXPIRY_MS);
 
     const authorName = post.author
       ? (post.author.name ?? `${post.author.first_name ?? ""} ${post.author.last_name ?? ""}`.trim())
       : post.author_name ?? recruiter.name;
-    const authorHeadline = post.author?.headline ?? "";
     const authorAvatar = post.author?.avatar ?? post.author?.profile_picture ?? post.profile_picture ?? null;
     const isRepost = post.is_repost ?? (post.post_type === "repost" || post.type === "repost") ?? !!post.reshared_post;
+    const company = extractCompanyFromHeadline(authorHeadline);
 
     const existing = await prisma.job.findUnique({ where: { sourceUrl } });
 
@@ -212,12 +215,12 @@ export async function scrapeRecruiter(recruiter: {
         data: {
           rawText,
           contentHash,
-          title: extractTitle(rawText),
-          roleFamily: extractRoleFamily(rawText) as never,
-          seniority: extractSeniority(rawText) as never,
-          remoteMode: extractRemoteMode(rawText) as never,
-          stack: extractTechStack(rawText) as never[],
-          description: extractDescription(rawText),
+          title: classification.title,
+          roleFamily: classification.roleFamily as never,
+          seniority: classification.seniority as never,
+          remoteMode: classification.remoteMode as never,
+          stack: classification.techStack as never[],
+          description: classification.description,
           authorAvatar,
           commentCount: post.stats?.comments ?? post.comments ?? 0,
           postedAt: postedDate,
@@ -232,20 +235,20 @@ export async function scrapeRecruiter(recruiter: {
     await prisma.job.create({
       data: {
         recruiterId: recruiter.id,
-        title: extractTitle(rawText),
-        company: extractCompanyFromHeadline(authorHeadline),
+        title: classification.title,
+        company,
         author: authorName,
         authorTitle: authorHeadline,
         authorAvatar,
-        roleBadge: `${extractTitle(rawText)} @ ${extractCompanyFromHeadline(authorHeadline)}`,
+        roleBadge: `${classification.title} @ ${company}`,
         source: "linkedin",
         sourceUrl,
         isRepost,
-        roleFamily: extractRoleFamily(rawText) as never,
-        seniority: extractSeniority(rawText) as never,
-        remoteMode: extractRemoteMode(rawText) as never,
-        stack: extractTechStack(rawText) as never[],
-        description: extractDescription(rawText),
+        roleFamily: classification.roleFamily as never,
+        seniority: classification.seniority as never,
+        remoteMode: classification.remoteMode as never,
+        stack: classification.techStack as never[],
+        description: classification.description,
         rawText,
         contentHash,
         commentCount: post.stats?.comments ?? post.comments ?? 0,

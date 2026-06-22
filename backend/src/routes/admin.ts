@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { prisma } from "../lib/prisma";
 import { scrapeRecruiter } from "../lib/apify";
+import { JOB_EXPIRY_DAYS } from "../lib/config";
 
 const admin = new Hono();
 
@@ -73,7 +74,7 @@ admin.get("/recruiters", async (c) => {
 // DELETE /api/admin/jobs — clear jobs (all, expired, or older than N days)
 admin.delete("/jobs", async (c) => {
   const mode = c.req.query("mode") ?? "expired"; // expired | all | olderThan
-  const olderThanDays = parseInt(c.req.query("olderThanDays") ?? "7");
+  const olderThanDays = parseInt(c.req.query("olderThanDays") ?? String(JOB_EXPIRY_DAYS));
 
   let where = {};
   let description = "all jobs";

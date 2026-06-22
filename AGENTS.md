@@ -21,14 +21,14 @@ The best jobs in tech aren't on job boards. They're buried in social media posts
 1. **We watch** — Our system monitors hiring posts from real decision-makers on LinkedIn and X.
 2. **We display** — Every captured post appears in the feed with the original author, their role, the company, job details, and a link to the original post.
 3. **You vote** — The community upvotes quality posts (real hiring managers, clear roles) and downvotes spam (recruiters, vague listings).
-4. **Posts expire** — Jobs auto-expire after 7 days. Fresh stuff only.
+4. **Posts expire** — Jobs auto-expire after 30 days. Fresh stuff only.
 
 ## Core Principles
 
 - **Signal over noise** — Only posts from actual hiring managers (founders, heads, leads, the person you'd DM).
 - **Community-ranked** — Your votes decide what stays at the top. No paid placements.
 - **Transparent sourcing** — Every post links back to the original LinkedIn/X post. We don't rewrite or editorialize.
-- **Fresh only** — 7-day auto-expiry keeps the feed relevant.
+- **Fresh only** — 30-day auto-expiry keeps the feed relevant.
 
 ## Project Structure
 
