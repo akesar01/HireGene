@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { BACKEND_URL } from "@/lib/config";
 
 interface UpvoteButtonProps {
@@ -8,18 +8,48 @@ interface UpvoteButtonProps {
   initialScore: number;
 }
 
+function getStoredVote(jobId: number): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return localStorage.getItem(`vote_${jobId}`) === "up";
+  } catch {
+    return false;
+  }
+}
+
+function setStoredVote(jobId: number, voted: boolean) {
+  if (typeof window === "undefined") return;
+  try {
+    if (voted) {
+      localStorage.setItem(`vote_${jobId}`, "up");
+    } else {
+      localStorage.removeItem(`vote_${jobId}`);
+    }
+  } catch {
+    // ignore
+  }
+}
+
 export default function UpvoteButton({ jobId, initialScore }: UpvoteButtonProps) {
   const [score, setScore] = useState(initialScore);
   const [voted, setVoted] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // Sync voted state from localStorage on mount
+  useEffect(() => {
+    setVoted(getStoredVote(jobId));
+  }, [jobId]);
+
   async function handleVote() {
     if (loading) return;
     setLoading(true);
 
+    const prevScore = score;
+    const prevVoted = voted;
+
     // Optimistic update
-    const newVoted = !voted;
-    setScore(newVoted ? score + 1 : score - 1);
+    const newVoted = !prevVoted;
+    setScore(newVoted ? prevScore + 1 : prevScore - 1);
     setVoted(newVoted);
 
     try {
@@ -30,13 +60,12 @@ export default function UpvoteButton({ jobId, initialScore }: UpvoteButtonProps)
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      // Reconcile with server
       setScore(data.score);
       setVoted(data.voted);
+      setStoredVote(jobId, data.voted);
     } catch {
-      // Rollback on error
-      setScore(newVoted ? score - 1 : score + 1);
-      setVoted(!newVoted);
+      setScore(prevScore);
+      setVoted(prevVoted);
     } finally {
       setLoading(false);
     }

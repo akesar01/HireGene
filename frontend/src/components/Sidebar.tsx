@@ -7,7 +7,7 @@ import {
   type Job,
 } from "@/lib/data";
 import FilterRadio from "./FilterRadio";
-import CompanySearch from "./CompanySearch";
+import CompanyDropdown from "./CompanyDropdown";
 
 function formatLabel(value: string): string {
   return value.replace(/_/g, "-");
@@ -81,13 +81,21 @@ export default function Sidebar({
   const remoteModeCounts = getTagCounts(jobs, "remoteMode");
   const stackCounts = getTagCounts(jobs, "stack");
 
+  const companyMap = new Map<string, number>();
+  for (const job of jobs) {
+    companyMap.set(job.company, (companyMap.get(job.company) ?? 0) + 1);
+  }
+  const companyCounts = Array.from(companyMap.entries())
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
   const hasActiveFilters =
     !!currentRoleFamily || !!currentSeniority || !!currentRemoteMode || !!currentStack || !!currentCompany || currentSource !== "all";
 
   return (
     <nav className="space-y-5" aria-label="Job filters">
-      {/* Company search */}
-      <CompanySearch currentCompany={currentCompany} />
+      {/* Company filter */}
+      <CompanyDropdown companies={companyCounts} currentCompany={currentCompany} />
 
       <div className="border-t border-card-border" />
 

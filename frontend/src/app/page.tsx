@@ -124,6 +124,7 @@ export default async function Home({
       <header className="border-b border-card-border bg-card-bg sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
+            <img src="/logo.svg" alt="SkipTheBoard" width={24} height={24} className="shrink-0" />
             <span className="text-lg font-bold text-foreground tracking-tight">SkipTheBoard</span>
             <span className="hidden sm:inline text-xs text-muted">— stalk the poster, not the board</span>
           </Link>

@@ -44,7 +44,8 @@ export default function SubmitForm() {
     <div className="flex flex-1 flex-col">
       <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6">
         <header className="mb-8">
-          <Link href="/" className="inline-block">
+          <Link href="/" className="inline-flex items-center gap-2">
+            <img src="/logo.svg" alt="SkipTheBoard" width={24} height={24} className="shrink-0" />
             <span className="text-lg font-bold text-foreground tracking-tight">SkipTheBoard</span>
           </Link>
           <p className="mt-1 text-xs text-muted">
