@@ -1,4 +1,8 @@
 {
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api/[[...route]]" },
+    { "source": "/(health|docs)", "destination": "/api/[[...route]]" }
+  ],
   "functions": {
     "api/**/*.ts": {
       "maxDuration": 60

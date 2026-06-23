@@ -37,8 +37,13 @@ HireGene/
 ├── frontend/          # Next.js 16 app (React 19, TypeScript, Tailwind CSS 4)
 │   ├── src/app/       # App Router — pages, layout, global styles
 │   ├── src/components/  # UI components (JobCard, FilterPill, VoteButton, Sidebar)
-│   └── src/lib/       # Data types, constants, mock data, utility functions
-├── backend/           # (planned) API server for ingestion, auth, voting, storage
+│   └── src/lib/       # Data types, constants, config, mock data, utility functions
+├── backend/           # Hono API server (Prisma, PostgreSQL, Apify, Groq)
+│   ├── api/           # Vercel serverless entry point ([[...route]].ts)
+│   ├── prisma/        # Database schema and migrations
+│   ├── src/           # Routes, lib, OpenAPI spec
+│   └── scripts/       # Utility scripts (avatar updates, etc.)
+├── DEPLOYMENT.md      # Full deployment guide (frontend + backend)
 └── README.md
 ```
 
@@ -62,9 +67,37 @@ Each job post contains:
 - **Comments count**
 - **Posted time** — relative (e.g. "2h ago"), auto-expires after 7 days
 
-## Backend (Planned)
+## Backend
 
-The frontend currently uses mock data (`frontend/src/lib/data.ts`). When the backend is ready:
-- Replace mock data imports with API fetch calls
-- Implement: post ingestion, user auth, voting, commenting, expiry cron
-- Keep the API contract aligned with the `Job` interface in `src/lib/data.ts`
+The backend is a Hono app with Prisma + PostgreSQL. It provides:
+- Post ingestion via Apify (LinkedIn/X scraping)
+- Recruiter suggestions (community submissions)
+- Voting on job posts
+- Admin endpoints (protected by `ADMIN_SECRET`)
+- AI-powered post enrichment via Groq
+
+The frontend fetches jobs from the backend API. The API contract is aligned with the `Job` interface in `frontend/src/lib/data.ts`.
+
+Frontend config (`frontend/src/lib/config.ts`) centralizes `BACKEND_URL` and `API_KEY` — all client-side fetches import from there.
+
+## Deployment (Vercel)
+
+Both frontend and backend are deployed on Vercel.
+
+- **Frontend**: Next.js app, auto-detected by Vercel. Custom domain: `https://skiptheboard.in`
+- **Backend**: Hono app deployed as Vercel Serverless Functions via `api/[[...route]].ts` catch-all entry point.
+
+### Deployment URLs
+
+- Frontend: `https://skiptheboard.in` (custom domain via GoDaddy)
+- Frontend (Vercel): `https://frontend-seven-lilac-71.vercel.app`
+- Backend: `https://backend-umber-nu-43.vercel.app`
+
+### Full deployment guide
+
+See **[DEPLOYMENT.md](./DEPLOYMENT.md)** for complete step-by-step instructions including:
+- Environment variable setup
+- Custom domain configuration (GoDaddy + Vercel)
+- Backend deployment gotchas & fixes (ESM, Prisma, catch-all routing, CORS)
+- Local development setup
+- Redeploy commands

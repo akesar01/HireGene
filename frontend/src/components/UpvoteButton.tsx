@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { BACKEND_URL } from "@/lib/config";
 
 interface UpvoteButtonProps {
   jobId: number;
@@ -22,7 +23,7 @@ export default function UpvoteButton({ jobId, initialScore }: UpvoteButtonProps)
     setVoted(newVoted);
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8787"}/api/posts/${jobId}/vote`, {
+      const res = await fetch(`${BACKEND_URL}/api/posts/${jobId}/vote`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ direction: "up" }),

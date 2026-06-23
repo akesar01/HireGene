@@ -1,0 +1,39 @@
+name: Setup Branch Protection
+
+on:
+  workflow_dispatch:
+
+jobs:
+  protect-main:
+    name: Protect main branch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure branch protection rules
+        run: |
+          curl -sL -X PUT \
+            -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.repository }}/branches/main/protection \
+            -d '{
+              "required_status_checks": {
+                "strict": true,
+                "contexts": ["Frontend Build & Lint", "Backend Build & Test"]
+              },
+              "enforce_admins": true,
+              "required_pull_request_reviews": {
+                "required_approving_review_count": 1,
+                "dismiss_stale_reviews": true,
+                "require_code_owner_reviews": true
+              },
+              "restrictions": null,
+              "required_linear_history": true,
+              "allow_force_pushes": false,
+              "allow_deletions": false
+            }'
+
+      - name: Verify protection
+        run: |
+          curl -sL \
+            -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.repository }}/branches/main/protection | jq '.'

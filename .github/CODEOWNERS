@@ -1,0 +1,13 @@
+# Default owner — all files
+* @akesar01
+
+# Frontend
+/frontend/ @akesar01
+
+# Backend
+/backend/ @akesar01
+
+# Deployment & CI
+/.github/ @akesar01
+/DEPLOYMENT.md @akesar01
+/AGENTS.md @akesar01

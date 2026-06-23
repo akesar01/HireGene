@@ -1,10 +1,11 @@
 {
-  "name": "hiregene-backend",
+  "name": "skiptheboard-backend",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "vercel dev",
     "dev:local": "tsx watch dev-server.ts",
-    "build": "vercel build",
+    "build": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
     "test": "vitest"

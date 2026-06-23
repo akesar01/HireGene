@@ -1,7 +1,4 @@
-const BACKEND_URL =
-  process.env.BACKEND_URL ?? "https://hiregene-backend.vercel.app";
-const API_KEY = process.env.API_KEY;
-
+import { BACKEND_URL, API_KEY } from "./config";
 import type { Job, FilterParams, SortOption } from "./data";
 
 interface FeedResponse {

@@ -1,14 +1,15 @@
-import { JOB_EXPIRY_DAYS } from "./lib/config";
+import { JOB_EXPIRY_DAYS } from "./lib/config.js";
 
-const openApiSpec = {
+function buildOpenApiSpec(baseUrl: string) {
+  return {
   openapi: "3.0.0",
   info: {
-    title: "HireGene API",
+    title: "SkipTheBoard API",
     version: "1.0.0",
     description: "Community-driven job discovery platform. Watch real hiring managers across LinkedIn and X.",
   },
   servers: [
-    { url: "http://localhost:8787", description: "Local dev" },
+    { url: baseUrl, description: "Current deployment" },
   ],
   components: {
     securitySchemes: {
@@ -267,5 +268,6 @@ const openApiSpec = {
     },
   },
 };
+}
 
-export default openApiSpec;
+export default buildOpenApiSpec;

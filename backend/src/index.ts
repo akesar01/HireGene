@@ -2,10 +2,10 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { swaggerUI } from "@hono/swagger-ui";
-import adminRoutes from "./routes/admin";
-import postsRoutes from "./routes/posts";
-import submissionsRoutes from "./routes/submissions";
-import openApiSpec from "./openapi-spec";
+import adminRoutes from "./routes/admin.js";
+import postsRoutes from "./routes/posts.js";
+import submissionsRoutes from "./routes/submissions.js";
+import buildOpenApiSpec from "./openapi-spec.js";
 
 const app = new Hono();
 
@@ -13,7 +13,14 @@ app.use("*", logger());
 app.use(
   "*",
   cors({
-    origin: process.env.CORS_ORIGIN ?? "*",
+    origin: (origin, c) => {
+      const allowed = (process.env.CORS_ORIGIN ?? "*")
+        .split(",")
+        .map((o) => o.trim());
+      if (allowed.includes("*")) return "*";
+      if (origin && allowed.includes(origin)) return origin;
+      return null;
+    },
   }),
 );
 
@@ -21,7 +28,11 @@ app.use(
 app.get("/docs", swaggerUI({ url: "/api/openapi.json" }));
 
 // Serve OpenAPI spec as JSON
-app.get("/api/openapi.json", (c) => c.json(openApiSpec));
+app.get("/api/openapi.json", (c) => {
+  const url = new URL(c.req.url);
+  const baseUrl = `${url.protocol}//${url.host}`;
+  return c.json(buildOpenApiSpec(baseUrl));
+});
 
 app.route("/api/admin", adminRoutes);
 app.route("/api/posts", postsRoutes);

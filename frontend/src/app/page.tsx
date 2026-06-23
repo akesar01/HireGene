@@ -14,6 +14,7 @@ import { JOB_EXPIRY_DAYS } from "@/lib/config";
 import Sidebar from "@/components/Sidebar";
 import SortTabs from "@/components/SortTabs";
 import JobCard from "@/components/JobCard";
+import SocialProof from "@/components/SocialProof";
 import Link from "next/link";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -63,6 +64,13 @@ function makeBuildHref(state: FilterState) {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+export const metadata = {
+  title: "SkipTheBoard — Real tech jobs from hiring managers, not job boards",
+  description:
+    "Browse real tech jobs posted by hiring managers on LinkedIn and X. Community-ranked, auto-expiring feed with direct links to original posts. No job boards.",
+  alternates: { canonical: "/" },
+};
+
 export default async function Home({
   searchParams,
 }: {
@@ -96,6 +104,9 @@ export default async function Home({
 
   const results = sortJobs(filterJobs(allJobs, filters), sort);
 
+  const uniqueCompanies = new Set(allJobs.map((j) => j.company)).size;
+  const uniqueManagers = new Set(allJobs.map((j) => j.author)).size;
+
   const filterState: FilterState = {
     sort,
     source: source !== "all" ? source : "",
@@ -113,8 +124,8 @@ export default async function Home({
       <header className="border-b border-card-border bg-card-bg sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <span className="text-lg font-bold text-foreground tracking-tight">HireGene</span>
-            <span className="hidden sm:inline text-xs text-muted">— jobs in the wild</span>
+            <span className="text-lg font-bold text-foreground tracking-tight">SkipTheBoard</span>
+            <span className="hidden sm:inline text-xs text-muted">— stalk the poster, not the board</span>
           </Link>
           <div className="flex items-center gap-4">
             <span className="text-xs text-muted hidden sm:inline">
@@ -140,9 +151,9 @@ export default async function Home({
             <span className="text-accent">They&apos;re hiding in LinkedIn posts.</span>
           </h1>
           <p className="mt-4 text-base text-muted max-w-2xl leading-relaxed">
-            We watch real hiring managers — founders, VPs, team leads — across LinkedIn and X.
+            We watch real hiring managers founders, VPs, team leads across LinkedIn .
             Every post they make gets captured here before it vanishes.
-            No recruiters. No job boards. Just real jobs from the people actually hiring.
+            No job boards. Just real jobs from the people actually hiring.
           </p>
           <div className="mt-6 flex flex-wrap items-center gap-3">
             <a
@@ -157,6 +168,15 @@ export default async function Home({
             <span className="text-xs text-muted-light">
               🗳️ Community-ranked · ⏰ Auto-expires in {JOB_EXPIRY_DAYS} days · 🔗 Always links to source
             </span>
+          </div>
+
+          {/* Social proof stats */}
+          <div className="mt-5">
+            <SocialProof
+              totalJobs={allJobs.length}
+              totalCompanies={uniqueCompanies}
+              totalManagers={uniqueManagers}
+            />
           </div>
         </div>
       </section>

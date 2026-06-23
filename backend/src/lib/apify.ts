@@ -1,7 +1,7 @@
 import { createHash } from "crypto";
-import { prisma } from "./prisma";
-import { classifyPost } from "./llm-classifier";
-import { JOB_EXPIRY_DAYS } from "./config";
+import { prisma } from "./prisma.js";
+import { classifyPost } from "./llm-classifier.js";
+import { JOB_EXPIRY_DAYS } from "./config.js";
 
 const ACTOR_ID = "atomus~linkedin-posts-scraper-pro";
 const EXPIRY_MS = JOB_EXPIRY_DAYS * 24 * 60 * 60 * 1000;

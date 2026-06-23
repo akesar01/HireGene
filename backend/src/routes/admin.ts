@@ -1,7 +1,7 @@
 import { Hono } from "hono";
-import { prisma } from "../lib/prisma";
-import { scrapeRecruiter } from "../lib/apify";
-import { JOB_EXPIRY_DAYS } from "../lib/config";
+import { prisma } from "../lib/prisma.js";
+import { scrapeRecruiter } from "../lib/apify.js";
+import { JOB_EXPIRY_DAYS } from "../lib/config.js";
 
 const admin = new Hono();
 
