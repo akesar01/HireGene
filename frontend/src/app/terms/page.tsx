@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import Header from "@/components/Header";
 
 export const metadata: Metadata = {
   title: "Terms of Service",
@@ -18,7 +17,19 @@ export const metadata: Metadata = {
 export default function TermsPage() {
   return (
     <div className="min-h-screen">
-      <Header maxWidth="max-w-3xl" />
+      <header className="border-b border-card-border bg-card-bg sticky top-0 z-10">
+        <div className="max-w-3xl mx-auto px-6 py-3 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2">
+            <img src="/logo.svg" alt="SkipTheBoard" width={24} height={24} className="shrink-0" />
+            <span className="text-lg font-bold text-foreground tracking-tight">
+              SkipTheBoard
+            </span>
+          </Link>
+          <Link href="/" className="text-xs text-muted hover:text-foreground transition-colors">
+            &larr; back to feed
+          </Link>
+        </div>
+      </header>
 
       <article className="max-w-3xl mx-auto px-6 py-10">
         <h1 className="text-3xl font-bold text-foreground tracking-tight">Terms of Service</h1>
