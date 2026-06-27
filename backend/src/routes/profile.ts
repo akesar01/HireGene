@@ -23,8 +23,8 @@ interface ProfileDoc {
   updatedAt: Date;
 }
 
-function getCollection(): Collection<ProfileDoc> | null {
-  return getProfilesCollection() as unknown as Collection<ProfileDoc> | null;
+async function getCollection(): Promise<Collection<ProfileDoc> | null> {
+  return getProfilesCollection() as unknown as Promise<Collection<ProfileDoc> | null>;
 }
 
 const VALID_ROLE_FAMILIES = [
@@ -51,7 +51,7 @@ profile.get("/", async (c) => {
     return c.json({ error: "Authentication required" }, 401);
   }
 
-  const collection = getCollection();
+  const collection = await getCollection();
   if (!collection) {
     return c.json({ error: "Profile service unavailable" }, 503);
   }
@@ -71,7 +71,7 @@ profile.post("/resume", async (c) => {
     return c.json({ error: "Authentication required" }, 401);
   }
 
-  const collection = getCollection();
+  const collection = await getCollection();
   if (!collection) {
     return c.json({ error: "Profile service unavailable" }, 503);
   }
@@ -152,7 +152,7 @@ profile.put("/", async (c) => {
     return c.json({ error: "Authentication required" }, 401);
   }
 
-  const collection = getCollection();
+  const collection = await getCollection();
   if (!collection) {
     return c.json({ error: "Profile service unavailable" }, 503);
   }
@@ -216,7 +216,7 @@ profile.post("/match", async (c) => {
     return c.json({ error: "Authentication required" }, 401);
   }
 
-  const collection = getCollection();
+  const collection = await getCollection();
   if (!collection) {
     return c.json({ error: "Profile service unavailable" }, 503);
   }
