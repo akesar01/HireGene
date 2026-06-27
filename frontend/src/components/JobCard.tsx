@@ -1,13 +1,16 @@
 import type { Job } from "@/lib/data";
 import { timeAgo } from "@/lib/data";
 import UpvoteButton from "./UpvoteButton";
+import MatchBadge from "./MatchBadge";
 
 interface JobCardProps {
   job: Job;
   rank: number;
+  matchScore?: number;
+  matchReason?: string;
 }
 
-export default function JobCard({ job, rank }: JobCardProps) {
+export default function JobCard({ job, rank, matchScore, matchReason }: JobCardProps) {
   return (
     <article className="bg-card-bg border border-card-border rounded-xl p-4 shadow-card hover:shadow-card-hover hover:border-muted-light/40 transition-all duration-200 ease-out">
       <div className="flex gap-4">
@@ -42,10 +45,15 @@ export default function JobCard({ job, rank }: JobCardProps) {
             </time>
           </div>
 
-          {/* Job title */}
-          <h3 className="mt-3 text-base font-bold text-foreground leading-snug">
-            {job.title}
-          </h3>
+          {/* Job title + match badge */}
+          <div className="mt-3 flex items-center gap-2 flex-wrap">
+            <h3 className="text-base font-bold text-foreground leading-snug">
+              {job.title}
+            </h3>
+            {matchScore !== undefined && (
+              <MatchBadge score={matchScore} reason={matchReason} />
+            )}
+          </div>
 
           {/* Description bullets */}
           {job.description.length > 0 && (

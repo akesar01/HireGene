@@ -11,10 +11,16 @@ import {
 } from "@/lib/data";
 import { fetchJobs } from "@/lib/api";
 import { JOB_EXPIRY_DAYS } from "@/lib/config";
+import { auth } from "@clerk/nextjs/server";
+import { getProfile, type ResumeProfile } from "@/lib/profile";
+import { computeTagOverlapScore } from "@/lib/match";
 import Sidebar from "@/components/Sidebar";
 import SortTabs from "@/components/SortTabs";
 import JobCard from "@/components/JobCard";
 import SocialProof from "@/components/SocialProof";
+import Header from "@/components/Header";
+import PersonalizationPrompt from "@/components/PersonalizationPrompt";
+import PersonalizedFeed from "@/components/PersonalizedFeed";
 import Link from "next/link";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -86,23 +92,57 @@ export default async function Home({
   const stack = parseString(params.stack);
   const company = parseString(params.company);
 
-  const filters: FilterParams = {
-    source,
-    roleFamily,
-    seniority,
-    remoteMode,
-    stack,
-    company,
-  };
+  // Check if user is logged in and has a profile
+  const session = await auth();
+  let userProfile: ResumeProfile | null = null;
+  let usingProfileFilters = false;
+  if (session?.userId) {
+    try {
+      const token = await session.getToken();
+      if (token) {
+        userProfile = await getProfile(token);
+      }
+    } catch {
+      // Profile fetch failed — continue without personalization
+    }
+  }
+
+  // Personalization is based on MATCH-SCORE RANKING, not hard filtering.
+  // We never restrict the feed by profile attributes (that empties the feed).
+  // Instead: fetch all jobs honoring only explicit URL filters, then rank by match.
+  const hasUrlFilters = !!(roleFamily || seniority || remoteMode || stack || company);
+  const hasProfile = !!userProfile?.filterSummary;
+
+  // Personalized ranking active only when logged-in user has a profile
+  // AND hasn't manually applied URL filters (URL filters take precedence).
+  const personalizedRanking = hasProfile && !hasUrlFilters;
+  usingProfileFilters = personalizedRanking;
+
+  const effectiveFilters: FilterParams = { source, roleFamily, seniority, remoteMode, stack, company };
 
   let allJobs: Job[];
   try {
-    allJobs = await fetchJobs(sort, filters);
+    allJobs = await fetchJobs(sort, effectiveFilters);
   } catch {
     allJobs = mockJobs;
   }
 
-  const results = sortJobs(filterJobs(allJobs, filters), sort);
+  let results = sortJobs(filterJobs(allJobs, effectiveFilters), sort);
+
+  // Compute match scores for every job (badges show for any logged-in user with a profile)
+  let matchScores: Map<string, number> | undefined;
+  if (userProfile?.filterSummary) {
+    matchScores = new Map();
+    for (const job of results) {
+      matchScores.set(String(job.id), computeTagOverlapScore(job, userProfile.filterSummary));
+    }
+    // Rank by match score when personalizing (unless user picked a different sort)
+    if (personalizedRanking && sort === "hot") {
+      results = [...results].sort((a, b) =>
+        (matchScores!.get(String(b.id)) ?? 0) - (matchScores!.get(String(a.id)) ?? 0)
+      );
+    }
+  }
 
   const uniqueCompanies = new Set(allJobs.map((j) => j.company)).size;
   const uniqueManagers = new Set(allJobs.map((j) => j.author)).size;
@@ -121,27 +161,7 @@ export default async function Home({
   return (
     <div className="min-h-screen">
       {/* ── Header ── */}
-      <header className="border-b border-card-border bg-card-bg sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <img src="/logo.svg" alt="SkipTheBoard" width={24} height={24} className="shrink-0" />
-            <span className="text-lg font-bold text-foreground tracking-tight">SkipTheBoard</span>
-            <span className="hidden sm:inline text-xs text-muted">— stalk the poster, not the board</span>
-          </Link>
-          <div className="flex items-center gap-4">
-            <span className="text-xs text-muted hidden sm:inline">
-              <span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1.5 align-middle" />
-              {results.length} live jobs
-            </span>
-            <Link
-              href="/submit"
-              className="inline-flex items-center gap-1 bg-accent text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-accent-hover transition-colors"
-            >
-              + submit
-            </Link>
-          </div>
-        </div>
-      </header>
+      <Header liveJobsCount={results.length} />
 
       {/* ── Hero pitch ── */}
       <section className="bg-card-bg border-b border-card-border">
@@ -184,6 +204,18 @@ export default async function Home({
 
       {/* ── Main content ── */}
       <div className="max-w-7xl mx-auto px-6 py-6" id="feed">
+        {/* Profile filter banner */}
+        {usingProfileFilters && (
+          <div className="mb-4 flex items-center justify-between bg-accent-light border border-accent/20 rounded-lg px-4 py-2.5">
+            <p className="text-sm text-foreground">
+              <span className="font-semibold">Personalized feed</span> — ranked by match to your profile
+            </p>
+            <Link href="/?" className="text-xs font-medium text-accent hover:text-accent-hover transition-colors">
+              Clear
+            </Link>
+          </div>
+        )}
+
         {/* Sort tabs */}
         <div className="mb-6">
           <SortTabs currentSort={sort} buildHref={buildHref} />
@@ -210,11 +242,19 @@ export default async function Home({
           {/* Center: Feed */}
           <main className="flex-1 min-w-0" aria-label="Job listings">
             {results.length > 0 ? (
-              <div className="space-y-4">
-                {results.map((job, i) => (
-                  <JobCard key={job.id} job={job} rank={i + 1} />
-                ))}
-              </div>
+              userProfile?.filterSummary ? (
+                <PersonalizedFeed
+                  jobs={results}
+                  profile={userProfile}
+                  initialScores={Object.fromEntries(matchScores ?? new Map())}
+                />
+              ) : (
+                <div className="space-y-4">
+                  {results.map((job, i) => (
+                    <JobCard key={job.id} job={job} rank={i + 1} />
+                  ))}
+                </div>
+              )
             ) : (
               <div className="py-16 text-center text-sm text-muted bg-card-bg border border-card-border rounded-lg">
                 no jobs match your filters.{" "}
@@ -228,6 +268,9 @@ export default async function Home({
           {/* Right: Info sidebar */}
           <aside className="hidden lg:block w-72 shrink-0">
             <div className="sticky top-20 space-y-4">
+              {/* Personalization prompt (anonymous users) */}
+              <PersonalizationPrompt hasProfile={!!userProfile} />
+
               {/* Stats card */}
               <div className="bg-card-bg border border-card-border rounded-xl p-5 shadow-card">
                 <div className="flex items-center justify-between">
