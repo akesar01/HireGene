@@ -5,11 +5,14 @@ import { swaggerUI } from "@hono/swagger-ui";
 import adminRoutes from "./routes/admin.js";
 import postsRoutes from "./routes/posts.js";
 import submissionsRoutes from "./routes/submissions.js";
+import profileRoutes from "./routes/profile.js";
+import { clerkOptionalAuth } from "./lib/clerk-auth.js";
 import buildOpenApiSpec from "./openapi-spec.js";
 
 const app = new Hono();
 
 app.use("*", logger());
+app.use("*", clerkOptionalAuth);
 app.use(
   "*",
   cors({
@@ -36,6 +39,7 @@ app.get("/api/openapi.json", (c) => {
 
 app.route("/api/admin", adminRoutes);
 app.route("/api/posts", postsRoutes);
+app.route("/api/profile", profileRoutes);
 app.route("/api", submissionsRoutes);
 
 app.get("/health", (c) => c.json({ status: "ok" }));
