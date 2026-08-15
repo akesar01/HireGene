@@ -8,6 +8,7 @@ import ResumeUpload from "@/components/ResumeUpload";
 import ResumeDisplay from "@/components/ResumeDisplay";
 import FilterEditor from "@/components/FilterEditor";
 import { getProfile, type ResumeProfile } from "@/lib/profile";
+import ResumeShareLink from "@/components/ResumeShareLink";
 
 export default function ProfilePage() {
   const { isLoaded, isSignedIn, getToken } = useAuth();
@@ -122,11 +123,11 @@ export default function ProfilePage() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-accent shrink-0 mt-0.5">3.</span>
-                  <span>Your job feed auto-filters to match your profile. Adjust anytime below.</span>
+                  <span>Your job feed ranks by match. On any card, Draft DM writes a ready message from this resume and that post. You copy it and send it yourself.</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-accent shrink-0 mt-0.5">4.</span>
-                  <span>Your resume is <strong className="text-foreground">not stored</strong> — only the parsed data is saved.</span>
+                  <span>We host a shareable resume page from the parsed data. Draft DM and Connect note can include that link.</span>
                 </li>
               </ul>
             </div>
@@ -146,6 +147,8 @@ export default function ProfilePage() {
                 onError={(msg) => setError(msg)}
               />
             </div>
+
+            {profile.resumeUrl && <ResumeShareLink url={profile.resumeUrl} />}
 
             {/* Parsed resume data */}
             <div>

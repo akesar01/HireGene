@@ -1,74 +1,24 @@
 import {
   jobs as mockJobs,
   excludeExpiredJobs,
-  filterJobs,
-  sortJobs,
-  SORT_OPTIONS,
-  SOURCE_OPTIONS,
-  type SortOption,
-  type SourceFilter,
   type FilterParams,
-  type Job,
 } from "@/lib/data";
 import { fetchJobs } from "@/lib/api";
 import { JOB_EXPIRY_DAYS } from "@/lib/config";
 import { auth } from "@clerk/nextjs/server";
 import { getProfile, type ResumeProfile } from "@/lib/profile";
 import { computeTagOverlapScore } from "@/lib/match";
-import Sidebar from "@/components/Sidebar";
-import SortTabs from "@/components/SortTabs";
-import JobCard from "@/components/JobCard";
+import JobBoard from "@/components/JobBoard";
 import SocialProof from "@/components/SocialProof";
 import Header from "@/components/Header";
 import PersonalizationPrompt from "@/components/PersonalizationPrompt";
-import PersonalizedFeed from "@/components/PersonalizedFeed";
 import HeroSignInCTA from "@/components/HeroSignInCTA";
 import Link from "next/link";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function parseSort(value: unknown): SortOption {
-  if (typeof value === "string" && SORT_OPTIONS.includes(value as SortOption)) {
-    return value as SortOption;
-  }
-  return "hot";
-}
-
-function parseSource(value: unknown): SourceFilter {
-  if (typeof value === "string" && SOURCE_OPTIONS.includes(value as SourceFilter)) {
-    return value as SourceFilter;
-  }
-  return "all";
-}
-
 function parseString(value: unknown): string {
   return typeof value === "string" ? value : "";
-}
-
-interface FilterState {
-  sort: string;
-  source: string;
-  role_family: string;
-  seniority: string;
-  remote_mode: string;
-  stack: string;
-  company: string;
-  applied_only: string;
-}
-
-function makeBuildHref(state: FilterState) {
-  return (key: string, value: string): string => {
-    const params = new URLSearchParams();
-    for (const [k, v] of Object.entries(state)) {
-      if (k === key) {
-        if (v !== value) params.set(k, value);
-      } else if (v) {
-        params.set(k, v);
-      }
-    }
-    const qs = params.toString();
-    return qs ? `/?${qs}` : "/";
-  };
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -87,12 +37,10 @@ export default async function Home({
 }) {
   const params = await searchParams;
 
-  const sort = parseSort(params.sort);
-  const source = parseSource(params.source);
+  const country = parseString(params.country);
   const roleFamily = parseString(params.role_family);
   const seniority = parseString(params.seniority);
   const remoteMode = parseString(params.remote_mode);
-  const stack = parseString(params.stack);
   const company = parseString(params.company);
   const appliedOnly = params.applied_only === "true";
 
@@ -115,7 +63,7 @@ export default async function Home({
   // Personalization is based on MATCH-SCORE RANKING, not hard filtering.
   // We never restrict the feed by profile attributes (that empties the feed).
   // Instead: fetch all jobs honoring only explicit URL filters, then rank by match.
-  const hasUrlFilters = !!(roleFamily || seniority || remoteMode || stack || company);
+  const hasUrlFilters = !!(country || roleFamily || seniority || remoteMode || company);
   const hasProfile = !!userProfile?.filterSummary;
 
   // Personalized ranking active only when logged-in user has a profile
@@ -123,53 +71,39 @@ export default async function Home({
   const personalizedRanking = hasProfile && !hasUrlFilters;
   usingProfileFilters = personalizedRanking;
 
-  const effectiveFilters: FilterParams = { source, roleFamily, seniority, remoteMode, stack, company, appliedOnly };
+  const feedFilters: FilterParams = {
+    source: "all",
+    roleFamily: "",
+    seniority: "",
+    remoteMode: "",
+    stack: "",
+    company: "",
+    appliedOnly,
+  };
 
-  let allJobs: Job[];
+  let allJobs;
   try {
     allJobs = excludeExpiredJobs(
-      await fetchJobs(sort, effectiveFilters, authToken ?? undefined),
+      await fetchJobs("new", feedFilters, authToken ?? undefined),
     );
   } catch {
     allJobs = mockJobs;
   }
 
-  let results = sortJobs(filterJobs(allJobs, effectiveFilters), sort);
-
-  // Compute match scores for every job (badges show for any logged-in user with a profile)
-  let matchScores: Map<string, number> | undefined;
+  const matchScores: Record<string, number> = {};
   if (userProfile?.filterSummary) {
-    matchScores = new Map();
-    for (const job of results) {
-      matchScores.set(String(job.id), computeTagOverlapScore(job, userProfile.filterSummary));
-    }
-    // Rank by match score when personalizing (unless user picked a different sort)
-    if (personalizedRanking && sort === "hot") {
-      results = [...results].sort((a, b) =>
-        (matchScores!.get(String(b.id)) ?? 0) - (matchScores!.get(String(a.id)) ?? 0)
-      );
+    for (const job of allJobs) {
+      matchScores[String(job.id)] = computeTagOverlapScore(job, userProfile.filterSummary);
     }
   }
 
   const uniqueCompanies = new Set(allJobs.map((j) => j.company)).size;
   const uniqueManagers = new Set(allJobs.map((j) => j.author)).size;
 
-  const filterState: FilterState = {
-    sort,
-    source: source !== "all" ? source : "",
-    role_family: roleFamily,
-    seniority,
-    remote_mode: remoteMode,
-    stack,
-    company,
-    applied_only: appliedOnly ? "true" : "",
-  };
-  const buildHref = makeBuildHref(filterState);
-
   return (
     <div className="min-h-screen">
       {/* ── Header ── */}
-      <Header liveJobsCount={results.length} />
+      <Header liveJobsCount={allJobs.length} />
 
       {/* ── Hero pitch ── */}
       <section className="bg-card-bg border-b border-card-border">
@@ -185,7 +119,7 @@ export default async function Home({
             No job boards. Just real jobs from the people actually hiring.
           </p>
           <p className="mt-2 text-sm text-muted max-w-2xl leading-relaxed">
-            <span className="text-accent font-medium">New:</span> Upload your resume and we&apos;ll rank jobs by how well they match your skills, role, and seniority — powered by AI.
+            <span className="text-accent font-medium">New:</span> Upload your resume and we&apos;ll rank jobs by match, then write a ready-to-copy DM from the original post and your resume. You send it.
           </p>
           <div className="mt-6 flex flex-wrap items-center gap-3">
             <a
@@ -220,7 +154,7 @@ export default async function Home({
         {usingProfileFilters && (
           <div className="mb-4 flex items-center justify-between bg-accent-light border border-accent/20 rounded-lg px-4 py-2.5">
             <p className="text-sm text-foreground">
-              <span className="font-semibold">Personalized feed</span> — ranked by match to your profile
+              <span className="font-semibold">Personalized feed</span> - match scores shown from your resume
             </p>
             <Link href="/?" className="text-xs font-medium text-accent hover:text-accent-hover transition-colors">
               Clear
@@ -228,12 +162,10 @@ export default async function Home({
           </div>
         )}
 
-        {/* Sort tabs + Applied filter */}
-        <div className="mb-6 flex items-center justify-between gap-4">
-          <SortTabs currentSort={sort} buildHref={buildHref} />
-          {session?.userId && (
+        {session?.userId && (
+          <div className="mb-4 flex items-center justify-end">
             <Link
-              href={appliedOnly ? buildHref("applied_only", "") : buildHref("applied_only", "true")}
+              href={appliedOnly ? "/" : "/?applied_only=true"}
               className={[
                 "inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors shrink-0",
                 appliedOnly
@@ -246,51 +178,23 @@ export default async function Home({
               </svg>
               {appliedOnly ? "Applied Only" : "Show Applied"}
             </Link>
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* 3-column: Filters + Feed + Info */}
         <div className="flex gap-6">
-          {/* Left: Filter sidebar */}
-          <aside className="hidden md:block w-56 shrink-0">
-            <div className="sticky top-20 bg-card-bg border border-card-border rounded-xl p-4 shadow-card max-h-[calc(100vh-6rem)] overflow-y-auto">
-              <Sidebar
-                currentSource={source}
-                currentRoleFamily={roleFamily}
-                currentSeniority={seniority}
-                currentRemoteMode={remoteMode}
-                currentStack={stack}
-                currentCompany={company}
-                jobs={results}
-                buildHref={buildHref}
-              />
-            </div>
-          </aside>
-
-          {/* Center: Feed */}
-          <main className="flex-1 min-w-0" aria-label="Job listings">
-            {results.length > 0 ? (
-              userProfile?.filterSummary ? (
-                <PersonalizedFeed
-                  jobs={results}
-                  profile={userProfile}
-                  initialScores={Object.fromEntries(matchScores ?? new Map())}
-                />
-              ) : (
-                <div className="space-y-4">
-                  {results.map((job, i) => (
-                    <JobCard key={job.id} job={job} rank={i + 1} />
-                  ))}
-                </div>
-              )
-            ) : (
-              <div className="py-16 text-center text-sm text-muted bg-card-bg border border-card-border rounded-lg">
-                no jobs match your filters.{" "}
-                <Link href="/" className="text-accent hover:underline font-medium">
-                  clear all
-                </Link>
-              </div>
-            )}
+          <main className="min-w-0 flex-1" aria-label="Job listings">
+            <JobBoard
+              jobs={allJobs}
+              initialFilters={{
+                country,
+                roleFamily,
+                seniority,
+                remoteMode,
+                company,
+              }}
+              profile={userProfile}
+              matchScores={matchScores}
+            />
           </main>
 
           {/* Right: Info sidebar */}
@@ -303,7 +207,7 @@ export default async function Home({
               <div className="bg-card-bg border border-card-border rounded-xl p-5 shadow-card">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-2xl font-bold text-foreground">{results.length}</p>
+                    <p className="text-2xl font-bold text-foreground">{allJobs.length}</p>
                     <p className="text-xs text-muted">live jobs</p>
                   </div>
                   <div className="w-10 h-10 rounded-lg bg-accent-light flex items-center justify-center">
@@ -330,7 +234,7 @@ export default async function Home({
                   </li>
                   <li className="flex items-start gap-2.5">
                     <span className="w-5 h-5 rounded-full bg-accent-light text-accent flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">3</span>
-                    <span><strong className="text-foreground">Upload your resume</strong> — AI ranks jobs by match to your profile</span>
+                    <span><strong className="text-foreground">Upload your resume</strong> - AI ranks jobs and writes a ready DM you copy and send</span>
                   </li>
                   <li className="flex items-start gap-2.5">
                     <span className="w-5 h-5 rounded-full bg-accent-light text-accent flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">4</span>

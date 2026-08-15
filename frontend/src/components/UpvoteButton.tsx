@@ -83,14 +83,16 @@ export default function UpvoteButton({ jobId, initialScore }: UpvoteButtonProps)
             ? "bg-accent border-accent text-white"
             : "bg-surface border-card-border text-muted hover:bg-accent-light hover:border-accent hover:text-accent",
         ].join(" ")}
-        aria-label="Upvote"
+        aria-label={voted ? "Remove upvote" : "Upvote this job"}
         aria-pressed={voted}
+        title={voted ? "Remove upvote" : "Upvote"}
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
         </svg>
       </button>
       <span className="mt-1 text-xs font-bold text-foreground tabular-nums">{score}</span>
+      <span className="text-[10px] text-muted-light leading-none">votes</span>
     </div>
   );
 }

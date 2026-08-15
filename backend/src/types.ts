@@ -1,5 +1,5 @@
 export type Source = "linkedin" | "x";
-export type SortOption = "hot" | "new" | "top";
+export type SortOption = "new" | "top";
 
 export interface Job {
   id: number;

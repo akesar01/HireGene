@@ -93,14 +93,9 @@ export default function PersonalizedFeed({ jobs, profile, initialScores }: Perso
     return refinedScores.get(jobId)?.reason;
   }, [refinedScores]);
 
-  // Re-sort by refined score when not loading
-  const sortedJobs = isLoading
-    ? jobs
-    : [...jobs].sort((a, b) => (getScore(String(b.id)) ?? 0) - (getScore(String(a.id)) ?? 0));
-
   return (
     <div className="space-y-4">
-      {sortedJobs.map((job, i) => {
+      {jobs.map((job, i) => {
         const score = getScore(String(job.id));
         const reason = getReason(String(job.id));
         return (
