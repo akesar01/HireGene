@@ -84,8 +84,7 @@ model Recruiter {
   linkedinUrl        String   @unique @map("linkedin_url")
   active             Boolean  @default(true)
 
-  // Configurable cadence for future cron automation (v2).
-  // In v1, scrapes are triggered manually. Stored for forward-compat.
+  // Cadence used by /api/cron/scrape to decide if a recruiter is due.
   scrapeIntervalHours Int     @default(24) @map("scrape_interval_hours")
 
   addedAt            DateTime  @default(now()) @map("added_at")
@@ -95,7 +94,7 @@ model Recruiter {
   jobs               Job[]
   apifyRuns          ApifyRunLog[]
 
-  @@index([active, lastScrapedAt]) // future cron query + list endpoint filtering
+  @@index([active, lastScrapedAt]) // cron due-query + list endpoint filtering
   @@map("recruiters")
 }
 
@@ -138,6 +137,7 @@ model Job {
   recruiterId   Int      @map("recruiter_id")
   recruiter     Recruiter @relation(fields: [recruiterId], references: [id], onDelete: Cascade)
   votes         Vote[]
+  applications  JobApplication[]
 
   // Core fields
   title         String
@@ -230,4 +230,20 @@ model ApifyRunLog {
   errorMsg      String?  @map("error_msg")
 
   @@map("apify_run_logs")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// JOB APPLICATION MODEL (per-user "Applied" tracking, Clerk userId)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+model JobApplication {
+  id        Int      @id @default(autoincrement())
+  jobId     Int      @map("job_id")
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  userId    String   @map("user_id")
+  appliedAt DateTime @default(now()) @map("applied_at")
+
+  @@unique([jobId, userId])
+  @@index([userId])
+  @@map("job_applications")
 }

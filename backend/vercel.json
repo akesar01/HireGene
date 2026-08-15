@@ -5,7 +5,13 @@
   ],
   "functions": {
     "api/**/*.ts": {
-      "maxDuration": 60
+      "maxDuration": 120
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/scrape",
+      "schedule": "0 4 * * *"
+    }
+  ]
 }

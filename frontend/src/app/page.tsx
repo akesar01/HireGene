@@ -11,10 +11,17 @@ import {
 } from "@/lib/data";
 import { fetchJobs } from "@/lib/api";
 import { JOB_EXPIRY_DAYS } from "@/lib/config";
+import { auth } from "@clerk/nextjs/server";
+import { getProfile, type ResumeProfile } from "@/lib/profile";
+import { computeTagOverlapScore } from "@/lib/match";
 import Sidebar from "@/components/Sidebar";
 import SortTabs from "@/components/SortTabs";
 import JobCard from "@/components/JobCard";
 import SocialProof from "@/components/SocialProof";
+import Header from "@/components/Header";
+import PersonalizationPrompt from "@/components/PersonalizationPrompt";
+import PersonalizedFeed from "@/components/PersonalizedFeed";
+import HeroSignInCTA from "@/components/HeroSignInCTA";
 import Link from "next/link";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -45,6 +52,7 @@ interface FilterState {
   remote_mode: string;
   stack: string;
   company: string;
+  applied_only: string;
 }
 
 function makeBuildHref(state: FilterState) {
@@ -85,24 +93,60 @@ export default async function Home({
   const remoteMode = parseString(params.remote_mode);
   const stack = parseString(params.stack);
   const company = parseString(params.company);
+  const appliedOnly = params.applied_only === "true";
 
-  const filters: FilterParams = {
-    source,
-    roleFamily,
-    seniority,
-    remoteMode,
-    stack,
-    company,
-  };
+  // Check if user is logged in and has a profile
+  const session = await auth();
+  let userProfile: ResumeProfile | null = null;
+  let usingProfileFilters = false;
+  let authToken: string | null = null;
+  if (session?.userId) {
+    try {
+      authToken = await session.getToken();
+      if (authToken) {
+        userProfile = await getProfile(authToken);
+      }
+    } catch {
+      // Profile fetch failed — continue without personalization
+    }
+  }
+
+  // Personalization is based on MATCH-SCORE RANKING, not hard filtering.
+  // We never restrict the feed by profile attributes (that empties the feed).
+  // Instead: fetch all jobs honoring only explicit URL filters, then rank by match.
+  const hasUrlFilters = !!(roleFamily || seniority || remoteMode || stack || company);
+  const hasProfile = !!userProfile?.filterSummary;
+
+  // Personalized ranking active only when logged-in user has a profile
+  // AND hasn't manually applied URL filters (URL filters take precedence).
+  const personalizedRanking = hasProfile && !hasUrlFilters;
+  usingProfileFilters = personalizedRanking;
+
+  const effectiveFilters: FilterParams = { source, roleFamily, seniority, remoteMode, stack, company, appliedOnly };
 
   let allJobs: Job[];
   try {
-    allJobs = await fetchJobs(sort, filters);
+    allJobs = await fetchJobs(sort, effectiveFilters, authToken ?? undefined);
   } catch {
     allJobs = mockJobs;
   }
 
-  const results = sortJobs(filterJobs(allJobs, filters), sort);
+  let results = sortJobs(filterJobs(allJobs, effectiveFilters), sort);
+
+  // Compute match scores for every job (badges show for any logged-in user with a profile)
+  let matchScores: Map<string, number> | undefined;
+  if (userProfile?.filterSummary) {
+    matchScores = new Map();
+    for (const job of results) {
+      matchScores.set(String(job.id), computeTagOverlapScore(job, userProfile.filterSummary));
+    }
+    // Rank by match score when personalizing (unless user picked a different sort)
+    if (personalizedRanking && sort === "hot") {
+      results = [...results].sort((a, b) =>
+        (matchScores!.get(String(b.id)) ?? 0) - (matchScores!.get(String(a.id)) ?? 0)
+      );
+    }
+  }
 
   const uniqueCompanies = new Set(allJobs.map((j) => j.company)).size;
   const uniqueManagers = new Set(allJobs.map((j) => j.author)).size;
@@ -115,33 +159,14 @@ export default async function Home({
     remote_mode: remoteMode,
     stack,
     company,
+    applied_only: appliedOnly ? "true" : "",
   };
   const buildHref = makeBuildHref(filterState);
 
   return (
     <div className="min-h-screen">
       {/* ── Header ── */}
-      <header className="border-b border-card-border bg-card-bg sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <img src="/logo.svg" alt="SkipTheBoard" width={24} height={24} className="shrink-0" />
-            <span className="text-lg font-bold text-foreground tracking-tight">SkipTheBoard</span>
-            <span className="hidden sm:inline text-xs text-muted">— stalk the poster, not the board</span>
-          </Link>
-          <div className="flex items-center gap-4">
-            <span className="text-xs text-muted hidden sm:inline">
-              <span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1.5 align-middle" />
-              {results.length} live jobs
-            </span>
-            <Link
-              href="/submit"
-              className="inline-flex items-center gap-1 bg-accent text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-accent-hover transition-colors"
-            >
-              + submit
-            </Link>
-          </div>
-        </div>
-      </header>
+      <Header liveJobsCount={results.length} />
 
       {/* ── Hero pitch ── */}
       <section className="bg-card-bg border-b border-card-border">
@@ -156,6 +181,9 @@ export default async function Home({
             Every post they make gets captured here before it vanishes.
             No job boards. Just real jobs from the people actually hiring.
           </p>
+          <p className="mt-2 text-sm text-muted max-w-2xl leading-relaxed">
+            <span className="text-accent font-medium">New:</span> Upload your resume and we&apos;ll rank jobs by how well they match your skills, role, and seniority — powered by AI.
+          </p>
           <div className="mt-6 flex flex-wrap items-center gap-3">
             <a
               href="#feed"
@@ -166,10 +194,11 @@ export default async function Home({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
               </svg>
             </a>
-            <span className="text-xs text-muted-light">
-              🗳️ Community-ranked · ⏰ Auto-expires in {JOB_EXPIRY_DAYS} days · 🔗 Always links to source
-            </span>
+            {!session?.userId && <HeroSignInCTA />}
           </div>
+          <p className="mt-3 text-xs text-muted-light">
+            🗳️ Community-ranked · ⏰ Auto-expires in {JOB_EXPIRY_DAYS} days · 🔗 Always links to source · 🎯 AI-personalized feed
+          </p>
 
           {/* Social proof stats */}
           <div className="mt-5">
@@ -184,9 +213,37 @@ export default async function Home({
 
       {/* ── Main content ── */}
       <div className="max-w-7xl mx-auto px-6 py-6" id="feed">
-        {/* Sort tabs */}
-        <div className="mb-6">
+        {/* Profile filter banner */}
+        {usingProfileFilters && (
+          <div className="mb-4 flex items-center justify-between bg-accent-light border border-accent/20 rounded-lg px-4 py-2.5">
+            <p className="text-sm text-foreground">
+              <span className="font-semibold">Personalized feed</span> — ranked by match to your profile
+            </p>
+            <Link href="/?" className="text-xs font-medium text-accent hover:text-accent-hover transition-colors">
+              Clear
+            </Link>
+          </div>
+        )}
+
+        {/* Sort tabs + Applied filter */}
+        <div className="mb-6 flex items-center justify-between gap-4">
           <SortTabs currentSort={sort} buildHref={buildHref} />
+          {session?.userId && (
+            <Link
+              href={appliedOnly ? buildHref("applied_only", "") : buildHref("applied_only", "true")}
+              className={[
+                "inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors shrink-0",
+                appliedOnly
+                  ? "bg-green-500/10 border-green-500/30 text-green-600"
+                  : "bg-surface border-card-border text-muted hover:border-green-500/30 hover:text-green-600",
+              ].join(" ")}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              {appliedOnly ? "Applied Only" : "Show Applied"}
+            </Link>
+          )}
         </div>
 
         {/* 3-column: Filters + Feed + Info */}
@@ -210,11 +267,19 @@ export default async function Home({
           {/* Center: Feed */}
           <main className="flex-1 min-w-0" aria-label="Job listings">
             {results.length > 0 ? (
-              <div className="space-y-4">
-                {results.map((job, i) => (
-                  <JobCard key={job.id} job={job} rank={i + 1} />
-                ))}
-              </div>
+              userProfile?.filterSummary ? (
+                <PersonalizedFeed
+                  jobs={results}
+                  profile={userProfile}
+                  initialScores={Object.fromEntries(matchScores ?? new Map())}
+                />
+              ) : (
+                <div className="space-y-4">
+                  {results.map((job, i) => (
+                    <JobCard key={job.id} job={job} rank={i + 1} />
+                  ))}
+                </div>
+              )
             ) : (
               <div className="py-16 text-center text-sm text-muted bg-card-bg border border-card-border rounded-lg">
                 no jobs match your filters.{" "}
@@ -228,6 +293,9 @@ export default async function Home({
           {/* Right: Info sidebar */}
           <aside className="hidden lg:block w-72 shrink-0">
             <div className="sticky top-20 space-y-4">
+              {/* Personalization prompt (anonymous users) */}
+              <PersonalizationPrompt hasProfile={!!userProfile} />
+
               {/* Stats card */}
               <div className="bg-card-bg border border-card-border rounded-xl p-5 shadow-card">
                 <div className="flex items-center justify-between">
@@ -259,10 +327,14 @@ export default async function Home({
                   </li>
                   <li className="flex items-start gap-2.5">
                     <span className="w-5 h-5 rounded-full bg-accent-light text-accent flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">3</span>
-                    <span>You upvote real jobs, downvote spam. Community decides.</span>
+                    <span><strong className="text-foreground">Upload your resume</strong> — AI ranks jobs by match to your profile</span>
                   </li>
                   <li className="flex items-start gap-2.5">
                     <span className="w-5 h-5 rounded-full bg-accent-light text-accent flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">4</span>
+                    <span>You upvote real jobs, downvote spam. Community decides.</span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-accent-light text-accent flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">5</span>
                     <span>Posts auto-expire after {JOB_EXPIRY_DAYS} days. Fresh stuff only.</span>
                   </li>
                 </ul>

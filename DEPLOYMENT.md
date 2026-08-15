@@ -88,6 +88,7 @@ Set in Vercel dashboard or via CLI:
 npx vercel env add DATABASE_URL production
 npx vercel env add APIFY_TOKEN production
 npx vercel env add ADMIN_SECRET production
+npx vercel env add CRON_SECRET production
 npx vercel env add API_KEY production
 npx vercel env add CORS_ORIGIN production
 npx vercel env add GROQ_API_KEY production
@@ -116,6 +117,7 @@ Create `backend/.env`:
 DATABASE_URL="postgresql://user:password@host/db?sslmode=require"
 APIFY_TOKEN="your_apify_token"
 ADMIN_SECRET="your_admin_secret"
+CRON_SECRET="your_cron_secret"
 API_KEY="hiregene-api-key-dev"
 CORS_ORIGIN="http://localhost:3000"
 GROQ_API_KEY="your_groq_api_key"
@@ -127,6 +129,21 @@ Run dev server:
 cd backend
 npm run dev
 ```
+
+### Daily recruiter scrape
+
+`backend/vercel.json` registers a Vercel Cron that hits `GET /api/cron/scrape` every day at 04:00 UTC. Vercel sends `Authorization: Bearer $CRON_SECRET` when that env var is set.
+
+The endpoint scrapes one due recruiter (active, and `lastScrapedAt` older than `scrapeIntervalHours`, default 24h), then self-chains until the due list is empty. One hop stays inside the function timeout.
+
+Manual trigger (same auth as admin works too):
+
+```bash
+curl -X POST https://backend-umber-nu-43.vercel.app/api/cron/scrape \
+  -H "Authorization: Bearer $ADMIN_SECRET"
+```
+
+Use `?once=1` to scrape a single due recruiter and stop.
 
 ---
 
@@ -171,8 +188,11 @@ The `api/[[...route]].ts` optional catch-all only handles paths up to 2 segments
     { "source": "/(health|docs)", "destination": "/api/[[...route]]" }
   ],
   "functions": {
-    "api/**/*.ts": { "maxDuration": 60 }
-  }
+    "api/**/*.ts": { "maxDuration": 120 }
+  },
+  "crons": [
+    { "path": "/api/cron/scrape", "schedule": "0 4 * * *" }
+  ]
 }
 ```
 

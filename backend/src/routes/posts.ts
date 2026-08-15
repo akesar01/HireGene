@@ -1,7 +1,11 @@
 import { Hono } from "hono";
 import { prisma } from "../lib/prisma.js";
 
-const posts = new Hono();
+type Variables = {
+  userId: string | null;
+};
+
+const posts = new Hono<{ Variables: Variables }>();
 
 // Auth middleware — require API_KEY for read endpoints
 // Vote endpoint is public (no API key needed)
@@ -23,6 +27,21 @@ function mapToEnum(value: string): string {
   return value.replace(/-/g, "_");
 }
 
+// GET /api/posts/applied — get job IDs the current user has applied to (auth required)
+posts.get("/applied", async (c) => {
+  const userId = c.get("userId") as string | null;
+  if (!userId) {
+    return c.json({ error: "Authentication required" }, 401);
+  }
+
+  const applications = await prisma.jobApplication.findMany({
+    where: { userId },
+    select: { jobId: true },
+  });
+
+  return c.json({ jobIds: applications.map((a) => a.jobId) });
+});
+
 // GET /api/posts/recent — filtered + sorted feed
 posts.get("/recent", async (c) => {
   const sort = c.req.query("sort") ?? "new";
@@ -32,6 +51,8 @@ posts.get("/recent", async (c) => {
   const stack = c.req.query("stack");
   const source = c.req.query("source");
   const company = c.req.query("company");
+  const appliedOnly = c.req.query("applied_only") === "true";
+  const userId = c.get("userId") as string | null;
 
   const where = {
     // TODO: Re-enable 30-day expiry filter once we have fresh posts
@@ -42,6 +63,7 @@ posts.get("/recent", async (c) => {
     ...(stack ? { stack: { has: mapToEnum(stack) as never } } : {}),
     ...(source ? { source: mapToEnum(source) as never } : {}),
     ...(company ? { company: { contains: company, mode: "insensitive" as const } } : {}),
+    ...(appliedOnly && userId ? { applications: { some: { userId } } } : {}),
   };
 
   const orderBy =
@@ -127,6 +149,36 @@ posts.post("/:id/vote", async (c) => {
   ]);
   const updated = await prisma.job.findUnique({ where: { id }, select: { score: true } });
   return c.json({ score: updated!.score, voted: true, direction }, 201);
+});
+
+// POST /api/posts/:id/apply — toggle applied status (auth required)
+posts.post("/:id/apply", async (c) => {
+  const userId = c.get("userId") as string | null;
+  if (!userId) {
+    return c.json({ error: "Authentication required" }, 401);
+  }
+
+  const id = parseInt(c.req.param("id"));
+  if (isNaN(id)) {
+    return c.json({ error: "Invalid job ID" }, 400);
+  }
+
+  const job = await prisma.job.findUnique({ where: { id } });
+  if (!job) {
+    return c.json({ error: "Job not found" }, 404);
+  }
+
+  const existing = await prisma.jobApplication.findUnique({
+    where: { jobId_userId: { jobId: id, userId } },
+  });
+
+  if (existing) {
+    await prisma.jobApplication.delete({ where: { id: existing.id } });
+    return c.json({ applied: false });
+  }
+
+  await prisma.jobApplication.create({ data: { jobId: id, userId } });
+  return c.json({ applied: true }, 201);
 });
 
 export default posts;

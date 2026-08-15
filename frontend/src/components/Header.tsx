@@ -32,12 +32,18 @@ export default function Header({ liveJobsCount, maxWidth = "max-w-7xl" }: Header
           </Link>
           <Show when="signed-out">
             <SignInButton mode="modal">
-              <button className="text-sm font-medium text-foreground border border-card-border rounded-lg px-3 py-1.5 hover:bg-surface hover:border-border transition-colors">
+              <button className="text-sm font-medium text-muted hover:text-foreground transition-colors">
                 Sign in
               </button>
             </SignInButton>
           </Show>
           <Show when="signed-in">
+            <Link
+              href="/pricing"
+              className="text-sm font-medium text-muted hover:text-foreground transition-colors"
+            >
+              Pricing
+            </Link>
             <Link
               href="/profile"
               className="text-sm font-medium text-muted hover:text-foreground transition-colors"

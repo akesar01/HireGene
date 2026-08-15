@@ -1,13 +1,17 @@
 import type { Job } from "@/lib/data";
 import { timeAgo } from "@/lib/data";
 import UpvoteButton from "./UpvoteButton";
+import MatchBadge from "./MatchBadge";
+import AppliedButton from "./AppliedButton";
 
 interface JobCardProps {
   job: Job;
   rank: number;
+  matchScore?: number;
+  matchReason?: string;
 }
 
-export default function JobCard({ job, rank }: JobCardProps) {
+export default function JobCard({ job, rank, matchScore, matchReason }: JobCardProps) {
   return (
     <article className="bg-card-bg border border-card-border rounded-xl p-4 shadow-card hover:shadow-card-hover hover:border-muted-light/40 transition-all duration-200 ease-out">
       <div className="flex gap-4">
@@ -42,10 +46,15 @@ export default function JobCard({ job, rank }: JobCardProps) {
             </time>
           </div>
 
-          {/* Job title */}
-          <h3 className="mt-3 text-base font-bold text-foreground leading-snug">
-            {job.title}
-          </h3>
+          {/* Job title + match badge */}
+          <div className="mt-3 flex items-center gap-2 flex-wrap">
+            <h3 className="text-base font-bold text-foreground leading-snug">
+              {job.title}
+            </h3>
+            {matchScore !== undefined && (
+              <MatchBadge score={matchScore} reason={matchReason} />
+            )}
+          </div>
 
           {/* Description bullets */}
           {job.description.length > 0 && (
@@ -80,18 +89,21 @@ export default function JobCard({ job, rank }: JobCardProps) {
             ))}
           </div>
 
-          {/* See post link */}
-          <a
-            href={job.sourceUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-accent hover:text-accent-hover transition-colors"
-          >
-            view original post
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-            </svg>
-          </a>
+          {/* Actions: Applied button + See post link */}
+          <div className="mt-3 flex items-center gap-3">
+            <AppliedButton jobId={job.id} />
+            <a
+              href={job.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs font-semibold text-accent hover:text-accent-hover transition-colors"
+            >
+              view original post
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+              </svg>
+            </a>
+          </div>
         </div>
       </div>
     </article>
