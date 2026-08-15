@@ -2,6 +2,7 @@ import { createHash } from "crypto";
 import { prisma } from "./prisma.js";
 import { classifyPost } from "./llm-classifier.js";
 import { computeExpiresAt, isJobExpired, jobExpiryCutoff } from "./job-expiry.js";
+import { inferCompany } from "./extract-company.js";
 
 const ACTOR_ID = "atomus~linkedin-posts-scraper-pro";
 const MAX_POSTS = 5; // Only scrape the 5 most recent posts
@@ -204,7 +205,7 @@ export async function scrapeRecruiter(recruiter: {
       : post.author_name ?? recruiter.name;
     const authorAvatar = post.author?.avatar ?? post.author?.profile_picture ?? post.profile_picture ?? null;
     const isRepost = post.is_repost ?? (post.post_type === "repost" || post.type === "repost") ?? !!post.reshared_post;
-    const company = extractCompanyFromHeadline(authorHeadline);
+    const company = await resolveJobCompany(authorHeadline, rawText, recruiter.id);
 
     const existing = await prisma.job.findUnique({ where: { sourceUrl } });
 
@@ -225,6 +226,8 @@ export async function scrapeRecruiter(recruiter: {
           remoteMode: classification.remoteMode as never,
           stack: classification.techStack as never[],
           description: classification.description,
+          company,
+          roleBadge: `${classification.title} @ ${company}`,
           authorAvatar,
           commentCount: post.stats?.comments ?? post.comments ?? 0,
           postedAt: postedDate,
@@ -284,12 +287,29 @@ export async function scrapeRecruiter(recruiter: {
   };
 }
 
-function extractCompanyFromHeadline(headline: string): string {
-  const atMatch = headline.match(/@\s*([A-Za-z0-9&. ]+)/);
-  if (atMatch) return atMatch[1].trim();
-  const atWordMatch = headline.match(/\bat\s+([A-Za-z0-9&. ]+)/);
-  if (atWordMatch) return atWordMatch[1].trim();
-  return "Unknown";
+async function resolveJobCompany(
+  headline: string,
+  rawText: string,
+  recruiterId: number,
+): Promise<string> {
+  const submission = await prisma.recruiterSubmission.findFirst({
+    where: { recruiterId, company: { not: null } },
+    orderBy: { createdAt: "desc" },
+    select: { company: true },
+  });
+  const sibling = await prisma.job.findFirst({
+    where: {
+      recruiterId,
+      NOT: { company: { equals: "Unknown", mode: "insensitive" } },
+    },
+    orderBy: { createdAt: "desc" },
+    select: { company: true },
+  });
+  return inferCompany({
+    headline,
+    rawText,
+    fallbacks: [submission?.company, sibling?.company],
+  });
 }
 
 async function logRun(

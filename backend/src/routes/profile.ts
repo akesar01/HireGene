@@ -1,9 +1,17 @@
+import { randomBytes } from "crypto";
 import { Hono } from "hono";
 import type { Collection } from "mongodb";
 import { getProfilesCollection } from "../lib/mongo.js";
 import { parseResume, type ResumeData } from "../lib/resume-parser.js";
 import { extractTextFromPDF } from "../lib/pdf-extract.js";
 import { refineMatches, type MatchJobInput } from "../lib/match-scorer.js";
+import { prisma } from "../lib/prisma.js";
+import {
+  generateOutreachDraft,
+  profileHasOutreachContext,
+  resolveOpenUrl,
+  type OutreachProfile,
+} from "../lib/outreach-draft.js";
 
 type Variables = {
   userId: string | null;
@@ -19,6 +27,7 @@ interface ProfileDoc {
   certifications: string[];
   skills: ResumeData["skills"];
   filterSummary: ResumeData["filterSummary"];
+  shareSlug?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -38,6 +47,29 @@ const VALID_TECH_STACKS = [
   "python", "java", "sql", "ai", "aws", "langchain", "rag",
   "react", "llm", "nextjs", "typescript", "nodejs", "go", "rust", "docker",
 ];
+
+function newShareSlug(): string {
+  return randomBytes(9).toString("base64url");
+}
+
+function publicResumeUrl(slug: string): string {
+  const origin = (process.env.FRONTEND_URL ?? "https://skiptheboard.in").replace(/\/$/, "");
+  return `${origin}/r/${slug}`;
+}
+
+async function ensureShareSlug(
+  collection: Collection<ProfileDoc>,
+  userId: string,
+  existing?: string,
+): Promise<string> {
+  if (existing) return existing;
+  const shareSlug = newShareSlug();
+  await collection.updateOne(
+    { _id: userId } as any,
+    { $set: { shareSlug, updatedAt: new Date() } },
+  );
+  return shareSlug;
+}
 
 function sanitizeEnum(value: string, allowed: string[], fallback: string): string {
   const v = value.toLowerCase().trim();
@@ -61,7 +93,43 @@ profile.get("/", async (c) => {
     return c.json({ profile: null });
   }
 
-  return c.json({ profile: doc });
+  const shareSlug = await ensureShareSlug(collection, userId, doc.shareSlug);
+  return c.json({
+    profile: { ...doc, shareSlug, resumeUrl: publicResumeUrl(shareSlug) },
+  });
+});
+
+// GET /api/profile/public/:slug — hosted resume page data (no auth)
+profile.get("/public/:slug", async (c) => {
+  const slug = c.req.param("slug")?.trim();
+  if (!slug) return c.json({ error: "Not found" }, 404);
+
+  const collection = await getCollection();
+  if (!collection) {
+    return c.json({ error: "Profile service unavailable" }, 503);
+  }
+
+  const doc = await collection.findOne({ shareSlug: slug } as any);
+  if (!doc) return c.json({ error: "Not found" }, 404);
+
+  return c.json({
+    profile: {
+      contact: {
+        name: doc.contact?.name ?? "",
+        email: doc.contact?.email ?? "",
+        phone: "",
+        location: doc.contact?.location ?? "",
+        linkedin: doc.contact?.linkedin ?? "",
+        github: doc.contact?.github ?? "",
+        portfolio: doc.contact?.portfolio ?? "",
+      },
+      experience: doc.experience ?? [],
+      education: doc.education ?? [],
+      certifications: doc.certifications ?? [],
+      skills: doc.skills,
+      filterSummary: doc.filterSummary,
+    },
+  });
 });
 
 // POST /api/profile/resume — upload and parse resume
@@ -136,13 +204,16 @@ profile.post("/resume", async (c) => {
         filterSummary: resumeData.filterSummary,
         updatedAt: now,
       },
-      $setOnInsert: { createdAt: now },
+      $setOnInsert: { createdAt: now, shareSlug: newShareSlug() },
     },
     { upsert: true },
   );
 
   const savedDoc = await collection.findOne({ _id: userId } as any);
-  return c.json({ profile: savedDoc });
+  const shareSlug = await ensureShareSlug(collection, userId, (savedDoc as ProfileDoc | null)?.shareSlug);
+  return c.json({
+    profile: savedDoc ? { ...savedDoc, shareSlug, resumeUrl: publicResumeUrl(shareSlug) } : savedDoc,
+  });
 });
 
 // PUT /api/profile — update filter preferences manually
@@ -242,6 +313,88 @@ profile.post("/match", async (c) => {
   const matches = await refineMatches(userDoc as any, topJobs);
 
   return c.json({ matches });
+});
+
+// POST /api/profile/outreach — draft a DM from resume + job post
+profile.post("/outreach", async (c) => {
+  const userId = c.get("userId") as string | null;
+  if (!userId) {
+    return c.json({ error: "Authentication required" }, 401);
+  }
+
+  const collection = await getCollection();
+  if (!collection) {
+    return c.json({ error: "Profile service unavailable" }, 503);
+  }
+
+  const userDoc = await collection.findOne({ _id: userId } as any);
+  if (!userDoc || !profileHasOutreachContext(userDoc as OutreachProfile)) {
+    return c.json({ error: "Upload a resume first so we can draft from your profile." }, 404);
+  }
+
+  let body: { jobId?: unknown };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const jobId = typeof body.jobId === "number" ? body.jobId : Number(body.jobId);
+  if (!Number.isInteger(jobId) || jobId <= 0) {
+    return c.json({ error: "jobId is required" }, 400);
+  }
+
+  const job = await prisma.job.findUnique({
+    where: { id: jobId },
+    include: { recruiter: { select: { linkedinUrl: true } } },
+  });
+  if (!job) {
+    return c.json({ error: "Job not found" }, 404);
+  }
+
+  const authorProfileUrl = job.recruiter.linkedinUrl;
+  const shareSlug = await ensureShareSlug(collection, userId, (userDoc as ProfileDoc).shareSlug);
+  const resumeUrl = publicResumeUrl(shareSlug);
+  const draft = await generateOutreachDraft(userDoc as OutreachProfile, {
+    title: job.title,
+    company: job.company,
+    author: job.author,
+    authorTitle: job.authorTitle,
+    source: job.source,
+    sourceUrl: job.sourceUrl,
+    authorProfileUrl,
+    roleFamily: job.roleFamily,
+    seniority: job.seniority,
+    remoteMode: job.remoteMode,
+    stack: job.stack,
+    description: job.description,
+    rawText: job.rawText,
+  }, resumeUrl);
+
+  return c.json({
+    message: draft.message,
+    connectNote: draft.connectNote,
+    options: draft.options,
+    resumeUrl,
+    authorName: job.author,
+    authorTitle: job.authorTitle,
+    source: job.source,
+    sourceUrl: job.sourceUrl,
+    openUrl: resolveOpenUrl({
+      title: job.title,
+      company: job.company,
+      author: job.author,
+      authorTitle: job.authorTitle,
+      source: job.source,
+      sourceUrl: job.sourceUrl,
+      authorProfileUrl,
+      roleFamily: job.roleFamily,
+      seniority: job.seniority,
+      remoteMode: job.remoteMode,
+      stack: job.stack,
+      description: job.description,
+    }),
+  });
 });
 
 export default profile;

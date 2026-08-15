@@ -42,6 +42,7 @@ function buildOpenApiSpec(baseUrl: string) {
           author: { type: "string" },
           authorTitle: { type: "string" },
           authorAvatar: { type: "string", nullable: true },
+          authorProfileUrl: { type: "string", nullable: true },
           roleBadge: { type: "string" },
           source: { type: "string", enum: ["linkedin", "x"] },
           sourceUrl: { type: "string" },
@@ -113,7 +114,7 @@ function buildOpenApiSpec(baseUrl: string) {
         summary: "Get filtered + sorted job feed",
         security: [{ ApiKey: [] }],
         parameters: [
-          { name: "sort", in: "query", schema: { type: "string", enum: ["new", "top", "hot"] }, description: "Sort order (default: new)" },
+          { name: "sort", in: "query", schema: { type: "string", enum: ["new", "top"] }, description: "Sort order: new (latest first, default) or top (most voted)" },
           { name: "role_family", in: "query", schema: { type: "string" } },
           { name: "seniority", in: "query", schema: { type: "string" } },
           { name: "remote_mode", in: "query", schema: { type: "string" } },
@@ -126,6 +127,60 @@ function buildOpenApiSpec(baseUrl: string) {
             content: { "application/json": { schema: { type: "object", properties: { jobs: { type: "array", items: { $ref: "#/components/schemas/Job" } }, count: { type: "integer" } } } } },
           },
           "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
+        },
+      },
+    },
+    "/api/profile/outreach": {
+      post: {
+        summary: "Draft a LinkedIn or X DM from the user's resume and a job post",
+        description:
+          "Does not send the message. Returns two DM drafts to choose from, plus a separate 300-character LinkedIn connection-request note.",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: { jobId: { type: "integer" } },
+                required: ["jobId"],
+              },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "Draft generated",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    message: { type: "string" },
+                    connectNote: { type: "string" },
+                    options: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          id: { type: "string" },
+                          label: { type: "string" },
+                          why: { type: "string" },
+                          message: { type: "string" },
+                        },
+                      },
+                    },
+                    authorName: { type: "string" },
+                    authorTitle: { type: "string" },
+                    source: { type: "string", enum: ["linkedin", "x"] },
+                    sourceUrl: { type: "string" },
+                    openUrl: { type: "string" },
+                  },
+                },
+              },
+            },
+          },
+          "401": { description: "Authentication required" },
+          "404": { description: "No resume or job not found" },
         },
       },
     },

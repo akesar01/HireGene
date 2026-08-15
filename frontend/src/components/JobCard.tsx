@@ -3,6 +3,8 @@ import { timeAgo } from "@/lib/data";
 import UpvoteButton from "./UpvoteButton";
 import MatchBadge from "./MatchBadge";
 import AppliedButton from "./AppliedButton";
+import MessageButton from "./MessageButton";
+import ConnectNoteButton from "./ConnectNoteButton";
 
 interface JobCardProps {
   job: Job;
@@ -89,8 +91,10 @@ export default function JobCard({ job, rank, matchScore, matchReason }: JobCardP
             ))}
           </div>
 
-          {/* Actions: Applied button + See post link */}
-          <div className="mt-3 flex items-center gap-3">
+          {/* Actions */}
+          <div className="mt-3 flex items-center gap-3 flex-wrap">
+            <MessageButton job={job} />
+            {job.source === "linkedin" && <ConnectNoteButton job={job} />}
             <AppliedButton jobId={job.id} />
             <a
               href={job.sourceUrl}

@@ -67,11 +67,14 @@ posts.get("/recent", async (c) => {
   };
 
   const orderBy =
-    sort === "top" ? [{ score: "desc" as const }] : sort === "hot" ? [{ score: "desc" as const }, { postedAt: "desc" as const }] : [{ postedAt: "desc" as const }];
+    sort === "top"
+      ? [{ score: "desc" as const }, { postedAt: "desc" as const }]
+      : [{ postedAt: "desc" as const }];
 
   const jobs = await prisma.job.findMany({
     where,
     orderBy,
+    include: { recruiter: { select: { linkedinUrl: true } } },
   });
 
   return c.json({
@@ -82,6 +85,7 @@ posts.get("/recent", async (c) => {
       author: job.author,
       authorTitle: job.authorTitle,
       authorAvatar: job.authorAvatar,
+      authorProfileUrl: job.recruiter.linkedinUrl,
       roleBadge: job.roleBadge,
       source: job.source,
       sourceUrl: job.sourceUrl,

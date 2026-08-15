@@ -3,7 +3,7 @@ import { JOB_EXPIRY_DAYS } from "./config";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type Source = "linkedin" | "x";
-export type SortOption = "hot" | "new" | "top";
+export type SortOption = "new" | "top";
 export type SourceFilter = "all" | Source;
 
 export type RoleFamily = (typeof ROLE_FAMILIES)[number];
@@ -18,6 +18,7 @@ export interface Job {
   author: string;
   authorTitle: string;
   authorAvatar?: string | null;
+  authorProfileUrl?: string | null;
   roleBadge: string;
   source: Source;
   sourceUrl: string;
@@ -32,6 +33,8 @@ export interface Job {
   createdAt?: string;
 }
 
+export type JobCountry = "india" | "us";
+
 export interface FilterParams {
   source: SourceFilter;
   roleFamily: string;
@@ -39,6 +42,7 @@ export interface FilterParams {
   remoteMode: string;
   stack: string;
   company: string;
+  country?: string;
   appliedOnly?: boolean;
 }
 
@@ -97,7 +101,11 @@ export const TECH_STACKS = [
   "docker",
 ] as const;
 
-export const SORT_OPTIONS: SortOption[] = ["hot", "new", "top"];
+export const SORT_OPTIONS: SortOption[] = ["new", "top"];
+export const SORT_LABELS: Record<SortOption, string> = {
+  new: "Latest",
+  top: "Most voted",
+};
 export const SOURCE_OPTIONS: SourceFilter[] = ["all", "linkedin", "x"];
 
 const HOURS_MS = 3_600_000;
@@ -530,27 +538,51 @@ export function getTagCounts(jobList: Job[], field: keyof Job): TagCount[] {
 }
 
 function recencyMs(job: Job): number {
-  return new Date(job.createdAt ?? job.postedAt).getTime();
+  return new Date(job.postedAt || job.createdAt || 0).getTime();
 }
 
 export function sortJobs(jobList: Job[], sort: SortOption): Job[] {
   const sorted = [...jobList];
 
-  switch (sort) {
-    case "new":
-      return sorted.sort((a, b) => recencyMs(b) - recencyMs(a));
-
-    case "top":
-      return sorted.sort((a, b) => b.score - a.score);
-
-    case "hot":
-    default: {
-      // Score first. Among equal scores, show newly ingested jobs first.
-      return sorted.sort(
-        (a, b) => b.score - a.score || recencyMs(b) - recencyMs(a),
-      );
-    }
+  if (sort === "top") {
+    return sorted.sort((a, b) => b.score - a.score || recencyMs(b) - recencyMs(a));
   }
+
+  return sorted.sort((a, b) => recencyMs(b) - recencyMs(a));
+}
+
+const INDIA_HINTS = [
+  "india", "indian", "bengaluru", "bangalore", "hyderabad", "mumbai", "pune",
+  "delhi", "gurgaon", "gurugram", "noida", "chennai", "kolkata", "ahmedabad",
+  "jaipur", "kochi", "indore", "lpa", "lakhs", "inr", "wfo", "work from office",
+  "flipkart", "swiggy", "zomato", "phonepe", "razorpay", "zoho", "freshworks",
+  "meesho", "groww", "cred", "paytm", "zerodha", "infosys", "tcs", "wipro",
+];
+
+const US_HINTS = [
+  "united states", "usa", "u.s.", "seattle", "sunnyvale", "san francisco",
+  "bay area", "new york", "austin", "boston", "redmond", "cupertino",
+  "mountain view", "palo alto", "los angeles", "chicago", "denver", "atlanta",
+  "remote us", "us only", "united states only",
+];
+
+export function inferJobCountry(job: Job): JobCountry | null {
+  const blob = [
+    job.title,
+    job.company,
+    job.authorTitle,
+    job.roleBadge,
+    ...job.description,
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  const india = INDIA_HINTS.some((h) => blob.includes(h));
+  const us = US_HINTS.some((h) => blob.includes(h));
+  if (india && !us) return "india";
+  if (us && !india) return "us";
+  if (india) return "india";
+  return null;
 }
 
 export function filterJobs(jobList: Job[], filters: FilterParams): Job[] {
@@ -561,6 +593,10 @@ export function filterJobs(jobList: Job[], filters: FilterParams): Job[] {
     if (filters.remoteMode && job.remoteMode !== filters.remoteMode) return false;
     if (filters.stack && !(job.stack as string[]).includes(filters.stack)) return false;
     if (filters.company && !job.company.toLowerCase().includes(filters.company.toLowerCase())) return false;
+    if (filters.country) {
+      const country = inferJobCountry(job);
+      if (country !== filters.country) return false;
+    }
     return true;
   });
 }

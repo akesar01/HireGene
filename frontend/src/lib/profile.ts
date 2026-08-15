@@ -50,11 +50,25 @@ export interface ResumeProfile {
   certifications: string[];
   skills: Skills;
   filterSummary: FilterSummary;
+  shareSlug?: string;
+  resumeUrl?: string;
   createdAt?: string;
   updatedAt?: string;
 }
 
 // ─── API Functions ────────────────────────────────────────────────────────────
+
+export async function getPublicResume(slug: string): Promise<ResumeProfile | null> {
+  const res = await fetch(`${BACKEND_URL}/api/profile/public/${encodeURIComponent(slug)}`, {
+    cache: "no-store",
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    throw new Error(`Resume page returned ${res.status}`);
+  }
+  const data = await res.json() as { profile: ResumeProfile };
+  return data.profile;
+}
 
 export async function getProfile(token: string): Promise<ResumeProfile | null> {
   const res = await fetch(`${BACKEND_URL}/api/profile`, {
@@ -86,6 +100,46 @@ export async function uploadResume(token: string, file: File): Promise<ResumePro
 
   const data = await res.json() as { profile: ResumeProfile };
   return data.profile;
+}
+
+export interface OutreachOption {
+  id: string;
+  label: string;
+  why: string;
+  message: string;
+  kind?: "dm" | "connect";
+}
+
+export interface OutreachDraft {
+  message: string;
+  connectNote: string;
+  options?: OutreachOption[];
+  authorName: string;
+  authorTitle: string;
+  source: "linkedin" | "x";
+  sourceUrl: string;
+  openUrl: string;
+  resumeUrl?: string;
+}
+
+export async function draftOutreach(token: string, jobId: number): Promise<OutreachDraft> {
+  const res = await fetch(`${BACKEND_URL}/api/profile/outreach`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ jobId }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Failed to draft message" }));
+    const error = new Error(err.error ?? `Draft failed (${res.status})`) as Error & { status?: number };
+    error.status = res.status;
+    throw error;
+  }
+
+  return res.json() as Promise<OutreachDraft>;
 }
 
 export async function updateProfile(
