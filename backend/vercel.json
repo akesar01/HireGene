@@ -5,10 +5,14 @@
   ],
   "functions": {
     "api/**/*.ts": {
-      "maxDuration": 120
+      "maxDuration": 300
     }
   },
   "crons": [
+    {
+      "path": "/api/cron/expire-jobs",
+      "schedule": "0 3 * * *"
+    },
     {
       "path": "/api/cron/scrape",
       "schedule": "0 4 * * *"

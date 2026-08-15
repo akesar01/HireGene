@@ -22,3 +22,25 @@ describe("POST /api/cron/scrape", () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe("GET /api/cron/expire-jobs", () => {
+  it("rejects missing auth", async () => {
+    const res = await app.request("/api/cron/expire-jobs");
+    expect(res.status).toBe(401);
+    await expect(res.json()).resolves.toEqual({ error: "Unauthorized" });
+  });
+
+  it("rejects an invalid bearer token", async () => {
+    const res = await app.request("/api/cron/expire-jobs", {
+      headers: { Authorization: "Bearer not-a-real-secret" },
+    });
+    expect(res.status).toBe(401);
+  });
+});
+
+describe("POST /api/cron/expire-jobs", () => {
+  it("rejects missing auth", async () => {
+    const res = await app.request("/api/cron/expire-jobs", { method: "POST" });
+    expect(res.status).toBe(401);
+  });
+});

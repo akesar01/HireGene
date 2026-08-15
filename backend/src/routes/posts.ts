@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { prisma } from "../lib/prisma.js";
+import { activeJobWhere } from "../lib/job-expiry.js";
 
 type Variables = {
   userId: string | null;
@@ -55,8 +56,7 @@ posts.get("/recent", async (c) => {
   const userId = c.get("userId") as string | null;
 
   const where = {
-    // TODO: Re-enable 30-day expiry filter once we have fresh posts
-    // expiresAt: { gt: new Date() },
+    ...activeJobWhere(),
     ...(roleFamily ? { roleFamily: mapToEnum(roleFamily) as never } : {}),
     ...(seniority ? { seniority: mapToEnum(seniority) as never } : {}),
     ...(remoteMode ? { remoteMode: mapToEnum(remoteMode) as never } : {}),
@@ -93,6 +93,7 @@ posts.get("/recent", async (c) => {
       comments: job.commentCount,
       score: job.score,
       postedAt: job.postedAt.toISOString(),
+      createdAt: job.createdAt.toISOString(),
     })),
     count: jobs.length,
   });

@@ -1,5 +1,6 @@
 import {
   jobs as mockJobs,
+  excludeExpiredJobs,
   filterJobs,
   sortJobs,
   SORT_OPTIONS,
@@ -126,7 +127,9 @@ export default async function Home({
 
   let allJobs: Job[];
   try {
-    allJobs = await fetchJobs(sort, effectiveFilters, authToken ?? undefined);
+    allJobs = excludeExpiredJobs(
+      await fetchJobs(sort, effectiveFilters, authToken ?? undefined),
+    );
   } catch {
     allJobs = mockJobs;
   }

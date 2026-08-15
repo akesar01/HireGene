@@ -372,7 +372,7 @@ export default function AdminDashboard() {
                       </td>
                       <td className="py-3 pr-4 text-xs text-muted">
                         {r.lastScrapedAt
-                          ? new Date(r.lastScrapedAt).toLocaleDateString()
+                          ? new Date(r.lastScrapedAt).toLocaleString()
                           : "Never"}
                       </td>
                       <td className="py-3 pr-4 text-xs text-muted">

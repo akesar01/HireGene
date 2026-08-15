@@ -1,10 +1,9 @@
 import { createHash } from "crypto";
 import { prisma } from "./prisma.js";
 import { classifyPost } from "./llm-classifier.js";
-import { JOB_EXPIRY_DAYS } from "./config.js";
+import { computeExpiresAt, isJobExpired, jobExpiryCutoff } from "./job-expiry.js";
 
 const ACTOR_ID = "atomus~linkedin-posts-scraper-pro";
-const EXPIRY_MS = JOB_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
 const MAX_POSTS = 5; // Only scrape the 5 most recent posts
 
 function sleep(ms: number): Promise<void> {
@@ -98,7 +97,7 @@ export async function scrapeRecruiter(recruiter: {
       body: JSON.stringify({
         profiles: [recruiter.linkedinUrl],
         maxPosts: MAX_POSTS,
-        postedAfterDate: new Date(Date.now() - EXPIRY_MS).toISOString().split("T")[0],
+        postedAfterDate: jobExpiryCutoff().toISOString().split("T")[0],
         sortBy: "date",
         includeSharedPosts: true,
         includeReposts: true,
@@ -193,7 +192,12 @@ export async function scrapeRecruiter(recruiter: {
       : postedDateStr
         ? new Date(postedDateStr)
         : new Date();
-    const expiresAt = new Date(postedDate.getTime() + EXPIRY_MS);
+    if (isJobExpired(postedDate)) {
+      jobsSkipped++;
+      continue;
+    }
+
+    const expiresAt = computeExpiresAt(postedDate);
 
     const authorName = post.author
       ? (post.author.name ?? `${post.author.first_name ?? ""} ${post.author.last_name ?? ""}`.trim())

@@ -35,6 +35,15 @@ export function parseExcludeIds(raw: string | undefined): number[] {
   return ids;
 }
 
+export function hasBudgetForAnotherScrape(
+  startedAtMs: number,
+  budgetMs: number,
+  nowMs: number = Date.now(),
+  minRemainingMs: number = 15_000,
+): boolean {
+  return startedAtMs + budgetMs - nowMs >= minRemainingMs;
+}
+
 export function pickDueRecruiter<T extends RecruiterSchedule>(
   recruiters: T[],
   excludeIds: number[] = [],
@@ -52,14 +61,4 @@ export function pickDueRecruiter<T extends RecruiterSchedule>(
     });
 
   return { picked: due[0] ?? null, dueCount: due.length };
-}
-
-export function buildContinueUrl(requestUrl: string, excludeIds: number[]): string {
-  const url = new URL(requestUrl);
-  url.search = "";
-  url.searchParams.set("continue", "1");
-  if (excludeIds.length > 0) {
-    url.searchParams.set("exclude", excludeIds.slice(0, MAX_EXCLUDE_IDS).join(","));
-  }
-  return url.toString();
 }

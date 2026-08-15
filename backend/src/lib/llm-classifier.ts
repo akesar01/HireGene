@@ -44,7 +44,7 @@ interface LLMClassification {
 const SYSTEM_PROMPT = `You are a job post classifier. Given a LinkedIn/X post, determine if it's a genuine hiring post and extract structured data.
 
 Return ONLY valid JSON (no markdown, no explanation) with these fields:
-- isJobPost: boolean — true if this is a hiring/job post (someone recruiting or sharing a job opening), false if it's someone talking about being hired, personal updates, etc.
+- isJobPost: boolean — true ONLY if the author is recruiting for a specific open role right now (their team, their company, or a concrete opening they want people to apply to). false for thought leadership, market commentary, resume advice, ranting about job descriptions, or posts that only use #hiring / #jobsearch hashtags.
 - title: string — the actual job title being hired for (e.g. "Software Engineer II", "Product Manager", "ML Engineer"). Keep it concise. If not a job post, use "".
 - roleFamily: string — one of: engineering, ai_ml, product, design, data, growth, marketing, content, ops, founders_office, sales, strategy, finance, business, people
 - seniority: string — one of: intern, junior, mid, senior, lead, staff, head
@@ -56,7 +56,10 @@ CRITICAL RULES:
 1. Classify based on the actual ROLE being hired, NOT words that appear in the post. For example, "building the invoicing product" does NOT mean the role is "product" — if the post is hiring a software engineer, roleFamily should be "engineering".
 2. The job title should reflect the actual position, not the project or team description. "SDE II" or "Software Development Engineer" are titles; "invoicing ingestion" is a project.
 3. If a post describes a role but doesn't explicitly say "hiring" or "looking for", still classify it as a job post if it's clearly describing an open position with qualifications/responsibilities.
-4. If the post is someone celebrating being hired ("I got hired", "I accepted an offer"), isJobPost should be false.`;
+4. If the post is someone celebrating being hired ("I got hired", "I accepted an offer"), isJobPost should be false.
+5. Hashtags like #hiring, #techcareers, #jobsearch are NOT enough. Ignore them.
+6. Opinion / advice posts are not job posts, even if they talk about recruiters, hiring managers, LLMs, or the job market. Signals of commentary: "Do you agree?", "Views are my own", "I see this every week", criticizing JD wording.
+7. A specific open role has a real title and an ask to apply, refer, or DM. If you cannot name the position being filled, isJobPost is false.`;
 
 export async function classifyPost(
   text: string,

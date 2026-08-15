@@ -2,17 +2,17 @@
 // Best-effort: will miss edge cases. Clean extraction deferred to v2 LLM re-parse.
 
 const HIRING_PATTERNS = [
-  /\bhiring\b/i,
   /\bwe'?re looking for\b/i,
   /\blooking for\b.*\b(engineer|developer|designer|manager|analyst|intern|lead|head)\b/i,
   /\bjoin (my|our) team\b/i,
-  /\bopen (role|position)\b/i,
+  /\bopen (role|position)s?\b/i,
   /\bjob opening\b/i,
   /\bwe need\b.*\b(engineer|developer|designer|manager|analyst|intern|lead|head)\b/i,
   /\bmy team is (hiring|looking)\b/i,
   /\bactively (hiring|recruiting)\b/i,
   /\bI'?m hiring\b/i,
   /\bwe'?re hiring\b/i,
+  /\b(i am|we're) recruiting\b/i,
   // Indirect hiring language
   /\bstrong (opening|role|candidate)\b/i,
   /\bthis (role|position) (stands out|is tied|sits on|focuses on)\b/i,
@@ -32,17 +32,31 @@ const NON_HIRING_PATTERNS = [
   /\bjust got (the )?job\b/i,
   /\bhired at\b/i,
   /\baccepted (the )?offer\b/i,
+  /\bdo you agree\??\b/i,
+  /\bviews are my own\b/i,
+  /\bnobody hiring for\b/i,
+  /\bthe job post wants\b/i,
+  /\bi (watch|see) this every week\b/i,
+  /\bi see it in regularly\b/i,
+  /\bif you are not getting callbacks\b/i,
 ];
+
+/** Strip #hashtags so "#hiring" is not treated as an opening. */
+export function stripHashtags(text: string): string {
+  return text.replace(/(^|\s)#[\p{L}\p{N}_-]+/gu, " ");
+}
 
 export function isJobPost(text: string): boolean {
   if (!text || text.trim().length < 20) return false;
 
+  const body = stripHashtags(text);
+
   for (const pattern of NON_HIRING_PATTERNS) {
-    if (pattern.test(text)) return false;
+    if (pattern.test(body) || pattern.test(text)) return false;
   }
 
   for (const pattern of HIRING_PATTERNS) {
-    if (pattern.test(text)) return true;
+    if (pattern.test(body)) return true;
   }
 
   return false;

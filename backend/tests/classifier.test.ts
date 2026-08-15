@@ -33,6 +33,34 @@ describe("isJobPost", () => {
   it("returns false for non-hiring posts", () => {
     expect(isJobPost("Just attended a great conference on AI and machine learning.")).toBe(false);
   });
+
+  it("rejects hashtag-only hiring commentary", () => {
+    expect(
+      isJobPost(
+        "The Indian tech market is shifting fast.\n\nDo you agree?\n\n#india #hiring #techcareers #jobsearch",
+      ),
+    ).toBe(false);
+  });
+
+  it("rejects job-market rants that mention hiring but are not openings", () => {
+    const text = `
+Nobody hiring for "5 years of LLM experience" has 5 years of LLM experience.
+
+Not the recruiter.
+Not the hiring manager who signed off on it.
+
+ChatGPT went public in November 2022. That's three years and eight months.
+The job post wants five.
+
+The bar is real. The wording is broken.
+
+Do you agree?
+
+Joshua Talreja
+#india #hiring #techcareers #jobsearch
+`;
+    expect(isJobPost(text)).toBe(false);
+  });
 });
 
 describe("extractSeniority", () => {

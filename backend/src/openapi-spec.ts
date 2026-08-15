@@ -214,23 +214,58 @@ function buildOpenApiSpec(baseUrl: string) {
       },
     },
 
+    // ─── Cron: Expire old jobs ───
+    "/api/cron/expire-jobs": {
+      get: {
+        summary: `Delete jobs older than ${JOB_EXPIRY_DAYS} days`,
+        description:
+          `Permanently deletes jobs whose postedAt is older than ${JOB_EXPIRY_DAYS} days. ` +
+          "Vercel Cron calls GET daily. The daily scrape also runs this once at the start of the first hop.",
+        security: [{ CronAuth: [] }, { AdminAuth: [] }],
+        responses: {
+          "200": {
+            description: "Expired jobs deleted",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    ok: { type: "boolean" },
+                    deleted: { type: "integer" },
+                    expiryDays: { type: "integer" },
+                    message: { type: "string" },
+                  },
+                },
+              },
+            },
+          },
+          "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
+        },
+      },
+      post: {
+        summary: `Same as GET /api/cron/expire-jobs`,
+        security: [{ CronAuth: [] }, { AdminAuth: [] }],
+        responses: {
+          "200": { description: "Expired jobs deleted" },
+          "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
+        },
+      },
+    },
+
     // ─── Cron: Daily due scrape ───
     "/api/cron/scrape": {
       get: {
         summary: "Scrape the next due recruiter, then continue the rest in the background",
         description:
-          "Picks one active recruiter whose lastScrapedAt is older than scrapeIntervalHours (or never scraped). " +
-          "Scrapes that recruiter, then self-chains to drain the remaining due list. " +
-          "Vercel Cron calls GET daily. Manual callers may use GET or POST.",
+          "Scrapes active recruiters whose lastScrapedAt is older than scrapeIntervalHours (or never scraped). " +
+          "Processes as many due recruiters as the function time budget allows in this single request. " +
+          "Does not self-call. Vercel Cron hits GET on a schedule. Manual callers may use GET or POST.",
         security: [{ CronAuth: [] }, { AdminAuth: [] }],
         parameters: [
-          { name: "once", in: "query", schema: { type: "string", enum: ["1", "true"] }, description: "Scrape only one due recruiter and do not continue" },
-          { name: "exclude", in: "query", schema: { type: "string" }, description: "Comma-separated recruiter IDs to skip for this chain (failed earlier hops)" },
-          { name: "continue", in: "query", schema: { type: "string", enum: ["1"] }, description: "Internal continuation hop. Returns 202 and scrapes in the background." },
+          { name: "once", in: "query", schema: { type: "string", enum: ["1", "true"] }, description: "Scrape only one due recruiter" },
         ],
         responses: {
-          "200": { description: "One recruiter processed, or none due" },
-          "202": { description: "Continuation accepted" },
+          "200": { description: "Due recruiters processed up to the time budget, or none due" },
           "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
         },
       },
@@ -238,13 +273,10 @@ function buildOpenApiSpec(baseUrl: string) {
         summary: "Same as GET /api/cron/scrape",
         security: [{ CronAuth: [] }, { AdminAuth: [] }],
         parameters: [
-          { name: "once", in: "query", schema: { type: "string", enum: ["1", "true"] }, description: "Scrape only one due recruiter and do not continue" },
-          { name: "exclude", in: "query", schema: { type: "string" }, description: "Comma-separated recruiter IDs to skip for this chain" },
-          { name: "continue", in: "query", schema: { type: "string", enum: ["1"] }, description: "Internal continuation hop" },
+          { name: "once", in: "query", schema: { type: "string", enum: ["1", "true"] }, description: "Scrape only one due recruiter" },
         ],
         responses: {
-          "200": { description: "One recruiter processed, or none due" },
-          "202": { description: "Continuation accepted" },
+          "200": { description: "Due recruiters processed up to the time budget, or none due" },
           "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
         },
       },

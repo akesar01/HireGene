@@ -1,5 +1,5 @@
 import { BACKEND_URL, API_KEY } from "./config";
-import type { Job, FilterParams, SortOption } from "./data";
+import { excludeExpiredJobs, type Job, type FilterParams, type SortOption } from "./data";
 
 interface FeedResponse {
   jobs: Job[];
@@ -44,5 +44,5 @@ export async function fetchJobs(
   }
 
   const data = (await res.json()) as FeedResponse;
-  return data.jobs;
+  return excludeExpiredJobs(data.jobs);
 }
