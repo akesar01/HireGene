@@ -134,7 +134,7 @@ npm run dev
 
 `backend/vercel.json` registers a Vercel Cron that hits `GET /api/cron/scrape` every day at 04:00 UTC. Vercel sends `Authorization: Bearer $CRON_SECRET` when that env var is set.
 
-The endpoint scrapes one due recruiter (active, and `lastScrapedAt` older than `scrapeIntervalHours`, default 24h), then self-chains until the due list is empty. One hop stays inside the function timeout.
+The endpoint scrapes due recruiters (active, and `lastScrapedAt` older than `scrapeIntervalHours`, default 24h) in a single request until a time budget is used. It does not call itself. Remaining due recruiters are picked up on the next cron tick.
 
 Manual trigger (same auth as admin works too):
 

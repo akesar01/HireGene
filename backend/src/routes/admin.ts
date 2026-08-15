@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { prisma } from "../lib/prisma.js";
 import { scrapeRecruiter } from "../lib/apify.js";
 import { JOB_EXPIRY_DAYS } from "../lib/config.js";
+import { expiredJobWhere } from "../lib/job-expiry.js";
 
 const admin = new Hono();
 
@@ -80,8 +81,8 @@ admin.delete("/jobs", async (c) => {
   let description = "all jobs";
 
   if (mode === "expired") {
-    where = { expiresAt: { lt: new Date() } };
-    description = "expired jobs";
+    where = expiredJobWhere();
+    description = `jobs older than ${JOB_EXPIRY_DAYS} days`;
   } else if (mode === "olderThan") {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - olderThanDays);

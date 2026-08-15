@@ -1,3 +1,5 @@
+import { JOB_EXPIRY_DAYS } from "./config";
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type Source = "linkedin" | "x";
@@ -27,6 +29,7 @@ export interface Job {
   comments: number;
   score: number;
   postedAt: string;
+  createdAt?: string;
 }
 
 export interface FilterParams {
@@ -526,23 +529,25 @@ export function getTagCounts(jobList: Job[], field: keyof Job): TagCount[] {
     .map(([value, count]) => ({ value, count }));
 }
 
+function recencyMs(job: Job): number {
+  return new Date(job.createdAt ?? job.postedAt).getTime();
+}
+
 export function sortJobs(jobList: Job[], sort: SortOption): Job[] {
   const sorted = [...jobList];
 
   switch (sort) {
     case "new":
-      return sorted.sort(
-        (a, b) => new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime()
-      );
+      return sorted.sort((a, b) => recencyMs(b) - recencyMs(a));
 
     case "top":
       return sorted.sort((a, b) => b.score - a.score);
 
     case "hot":
     default: {
-      // hot = score first, then recency
+      // Score first. Among equal scores, show newly ingested jobs first.
       return sorted.sort(
-        (a, b) => b.score - a.score || new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime()
+        (a, b) => b.score - a.score || recencyMs(b) - recencyMs(a),
       );
     }
   }
@@ -558,6 +563,16 @@ export function filterJobs(jobList: Job[], filters: FilterParams): Job[] {
     if (filters.company && !job.company.toLowerCase().includes(filters.company.toLowerCase())) return false;
     return true;
   });
+}
+
+export function isJobFresh(postedAt: string, now = Date.now()): boolean {
+  const posted = new Date(postedAt).getTime();
+  if (Number.isNaN(posted)) return true;
+  return now - posted < JOB_EXPIRY_DAYS * DAYS_MS;
+}
+
+export function excludeExpiredJobs(jobList: Job[], now = Date.now()): Job[] {
+  return jobList.filter((job) => isJobFresh(job.postedAt, now));
 }
 
 export function timeAgo(dateStr: string): string {

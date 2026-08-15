@@ -1,11 +1,8 @@
-import { waitUntil } from "@vercel/functions";
 import { Hono } from "hono";
 import type { Context } from "hono";
-import { scrapeNextDue } from "../lib/scrape-due.js";
-import {
-  buildContinueUrl,
-  parseExcludeIds,
-} from "../lib/scrape-schedule.js";
+import { JOB_EXPIRY_DAYS } from "../lib/config.js";
+import { purgeExpiredJobs } from "../lib/job-expiry.js";
+import { scrapeDueBatch } from "../lib/scrape-due.js";
 
 const cron = new Hono();
 
@@ -24,151 +21,64 @@ cron.use("*", async (c, next) => {
 });
 
 async function handleScrape(c: Context) {
-  const excludeIds = parseExcludeIds(c.req.query("exclude"));
   const once = c.req.query("once") === "1" || c.req.query("once") === "true";
-  const isContinue = c.req.query("continue") === "1";
-  const authorization = c.req.header("Authorization") ?? "";
+  const budgetMs = once
+    ? 120_000
+    : Number(process.env.SCRAPE_BUDGET_MS ?? 240_000);
 
-  if (isContinue) {
-    const backgrounded = runInBackground(c, async () => {
-      const outcome = await scrapeNextDue(excludeIds);
-      logOutcome("continue", outcome);
-      await maybeContinue(c, {
-        excludeIds,
-        authorization,
-        once,
-        outcome,
-      });
-    });
+  const batch = await scrapeDueBatch({ once, budgetMs });
 
-    return c.json(
-      {
-        ok: true,
-        accepted: true,
-        continued: true,
-        message: backgrounded
-          ? "Continuation accepted"
-          : "Continuation processed",
-      },
-      202,
-    );
+  for (const item of batch.results) {
+    if (item.ok) {
+      console.log(
+        `[cron] scrape: recruiter ${item.recruiterId} (${item.name}) ` +
+          `created=${item.jobsCreated} skipped=${item.jobsSkipped}`,
+      );
+    } else {
+      console.error(
+        `[cron] scrape: recruiter ${item.recruiterId} (${item.name}) failed: ${item.error}`,
+      );
+    }
   }
 
-  const outcome = await scrapeNextDue(excludeIds);
-  logOutcome("scrape", outcome);
-
-  const continued = await maybeContinue(c, {
-    excludeIds,
-    authorization,
-    once,
-    outcome,
-  });
-
-  if (!outcome.picked) {
+  if (batch.results.length === 0) {
     return c.json({
       ok: true,
       processed: 0,
+      failed: 0,
       dueBefore: 0,
       remaining: 0,
-      continued: false,
+      exhaustedBudget: false,
       message: "No recruiters due",
+      results: [],
     });
   }
 
   return c.json({
-    ok: outcome.error === null,
-    processed: outcome.error === null ? 1 : 0,
-    dueBefore: outcome.dueCount,
-    remaining: outcome.remaining,
-    continued,
-    recruiter: {
-      id: outcome.picked.id,
-      name: outcome.picked.name,
-    },
-    result: outcome.result,
-    error: outcome.error,
+    ok: batch.failed === 0,
+    processed: batch.processed,
+    failed: batch.failed,
+    dueBefore: batch.dueBefore,
+    remaining: batch.remaining,
+    exhaustedBudget: batch.exhaustedBudget,
+    results: batch.results,
   });
 }
 
-async function maybeContinue(
-  c: Context,
-  opts: {
-    excludeIds: number[];
-    authorization: string;
-    once: boolean;
-    outcome: Awaited<ReturnType<typeof scrapeNextDue>>;
-  },
-): Promise<boolean> {
-  if (opts.once || !opts.outcome.picked || opts.outcome.remaining <= 0) {
-    return false;
-  }
-
-  const nextExclude =
-    opts.outcome.error === null
-      ? opts.excludeIds
-      : [...opts.excludeIds, opts.outcome.picked.id];
-  const nextUrl = buildContinueUrl(c.req.url, nextExclude);
-
-  const hop = fetch(nextUrl, {
-    method: "POST",
-    headers: { Authorization: opts.authorization },
-  }).then(async (res) => {
-    await res.text().catch(() => {});
-    if (!res.ok) {
-      console.error(`[cron] continue hop failed: ${res.status} ${nextUrl}`);
-    }
-  }).catch((err) => {
-    console.error("[cron] continue hop error:", err);
+async function handleExpireJobs(c: Context) {
+  const deleted = await purgeExpiredJobs();
+  console.log(`[cron] expire-jobs: deleted=${deleted} (older than ${JOB_EXPIRY_DAYS} days)`);
+  return c.json({
+    ok: true,
+    deleted,
+    expiryDays: JOB_EXPIRY_DAYS,
+    message: `Deleted ${deleted} jobs older than ${JOB_EXPIRY_DAYS} days`,
   });
-
-  runInBackground(c, () => hop);
-  return true;
-}
-
-function runInBackground(c: Context, work: () => Promise<unknown>): boolean {
-  const task = work();
-
-  try {
-    c.executionCtx.waitUntil(task);
-    return true;
-  } catch {
-    // No request execution context (local node server).
-  }
-
-  // @vercel/functions no-ops off-platform, so only trust it on Vercel.
-  if (process.env.VERCEL) {
-    waitUntil(task);
-    return true;
-  }
-
-  void task;
-  return false;
-}
-
-function logOutcome(
-  phase: "scrape" | "continue",
-  outcome: Awaited<ReturnType<typeof scrapeNextDue>>,
-) {
-  if (!outcome.picked) {
-    console.log(`[cron] ${phase}: no recruiters due`);
-    return;
-  }
-
-  if (outcome.error) {
-    console.error(
-      `[cron] ${phase}: recruiter ${outcome.picked.id} (${outcome.picked.name}) failed: ${outcome.error}`,
-    );
-    return;
-  }
-
-  console.log(
-    `[cron] ${phase}: recruiter ${outcome.picked.id} (${outcome.picked.name}) ` +
-      `created=${outcome.result?.jobsCreated ?? 0} skipped=${outcome.result?.jobsSkipped ?? 0} ` +
-      `remaining=${outcome.remaining}`,
-  );
 }
 
 cron.get("/scrape", handleScrape);
 cron.post("/scrape", handleScrape);
+cron.get("/expire-jobs", handleExpireJobs);
+cron.post("/expire-jobs", handleExpireJobs);
 
 export default cron;

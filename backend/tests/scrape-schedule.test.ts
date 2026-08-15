@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildContinueUrl,
+  hasBudgetForAnotherScrape,
   isRecruiterDue,
   parseExcludeIds,
   pickDueRecruiter,
@@ -105,10 +105,12 @@ describe("pickDueRecruiter", () => {
   });
 });
 
-describe("buildContinueUrl", () => {
-  it("strips caller query params and marks the hop as a continuation", () => {
-    expect(
-      buildContinueUrl("https://backend.example/api/cron/scrape?once=1&exclude=9", [4, 5]),
-    ).toBe("https://backend.example/api/cron/scrape?continue=1&exclude=4%2C5");
+describe("hasBudgetForAnotherScrape", () => {
+  it("stops when remaining time is below the reserve", () => {
+    expect(hasBudgetForAnotherScrape(0, 90_000, 80_000, 15_000)).toBe(false);
+  });
+
+  it("continues when remaining time is above the reserve", () => {
+    expect(hasBudgetForAnotherScrape(0, 90_000, 10_000, 15_000)).toBe(true);
   });
 });
