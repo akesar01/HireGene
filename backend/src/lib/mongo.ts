@@ -18,7 +18,7 @@ function getClientPromise(): Promise<MongoClient> | null {
     const client =
       globalForMongo.mongoClient ??
       new MongoClient(MONGODB_URI, {
-        maxPoolSize: 10,
+        maxPoolSize: 1,
         minPoolSize: 0,
         serverSelectionTimeoutMS: 5000,
       });

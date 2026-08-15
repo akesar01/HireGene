@@ -36,6 +36,7 @@ export interface FilterParams {
   remoteMode: string;
   stack: string;
   company: string;
+  appliedOnly?: boolean;
 }
 
 export interface TagCount {

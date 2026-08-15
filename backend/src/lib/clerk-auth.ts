@@ -14,6 +14,15 @@ export async function clerkOptionalAuth(c: Context, next: Next) {
 
   const token = authHeader.replace("Bearer ", "");
 
+  const machineSecrets = [process.env.CRON_SECRET, process.env.ADMIN_SECRET].filter(
+    (value): value is string => Boolean(value),
+  );
+  if (machineSecrets.includes(token)) {
+    c.set("userId", null);
+    await next();
+    return;
+  }
+
   if (!CLERK_SECRET_KEY) {
     console.warn("[Clerk] CLERK_SECRET_KEY not set — treating as anonymous");
     c.set("userId", null);

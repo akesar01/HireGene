@@ -81,6 +81,7 @@ npm run dev
 | GET | `/api/admin/recruiters` | Admin | List all tracked recruiters |
 | POST | `/api/admin/recruiter` | Admin | Add a new recruiter |
 | POST | `/api/admin/scrape` | Admin | Trigger manual scrape |
+| GET/POST | `/api/cron/scrape` | Cron / Admin | Daily due scrape (one recruiter per hop, then continues) |
 | GET | `/api/admin/submissions` | Admin | List community submissions |
 | POST | `/api/admin/submissions/:id/approve` | Admin | Approve a submission |
 | POST | `/api/admin/submissions/:id/reject` | Admin | Reject a submission |
