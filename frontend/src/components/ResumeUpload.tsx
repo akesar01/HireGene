@@ -92,7 +92,7 @@ export default function ResumeUpload({ onUploaded, onError }: ResumeUploadProps)
             Drop your resume here
           </p>
           <p className="text-xs text-muted">
-            PDF or TXT, max 5MB
+            PDF preferred (saved and shared as-is), or TXT. Max 5MB
           </p>
         </div>
       )}

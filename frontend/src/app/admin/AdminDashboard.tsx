@@ -31,6 +31,32 @@ interface Recruiter {
 
 type Tab = "submissions" | "recruiters";
 
+function formatLastScraped(iso: string | null): {
+  relative: string;
+  exact: string;
+  stale: boolean;
+} {
+  if (!iso) {
+    return { relative: "Never", exact: "Not scraped yet", stale: true };
+  }
+
+  const then = new Date(iso);
+  const hours = Math.max(0, (Date.now() - then.getTime()) / 3_600_000);
+  let relative: string;
+  if (hours < 1) relative = "Just now";
+  else if (hours < 24) relative = `${Math.round(hours)}h ago`;
+  else {
+    const days = Math.round(hours / 24);
+    relative = `${days}d ago`;
+  }
+
+  return {
+    relative,
+    exact: then.toLocaleString(),
+    stale: hours >= 48,
+  };
+}
+
 export default function AdminDashboard() {
   const [secret, setSecret] = useState("");
   const [authed, setAuthed] = useState(false);
@@ -346,7 +372,9 @@ export default function AdminDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {recruiters.map((r) => (
+                  {recruiters.map((r) => {
+                    const scraped = formatLastScraped(r.lastScrapedAt);
+                    return (
                     <tr key={r.id} className="border-b border-border-light">
                       <td className="py-3 pr-4">
                         <p className="font-semibold text-foreground">{r.name}</p>
@@ -370,10 +398,11 @@ export default function AdminDashboard() {
                           {r.active ? "Active" : "Inactive"}
                         </span>
                       </td>
-                      <td className="py-3 pr-4 text-xs text-muted">
-                        {r.lastScrapedAt
-                          ? new Date(r.lastScrapedAt).toLocaleString()
-                          : "Never"}
+                      <td className="py-3 pr-4 text-xs">
+                        <p className={scraped.stale ? "font-semibold text-red-600" : "text-muted"}>
+                          {scraped.relative}
+                        </p>
+                        <p className="text-[11px] text-muted-light">{scraped.exact}</p>
                       </td>
                       <td className="py-3 pr-4 text-xs text-muted">
                         {new Date(r.addedAt).toLocaleDateString()}
@@ -389,7 +418,8 @@ export default function AdminDashboard() {
                         </button>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

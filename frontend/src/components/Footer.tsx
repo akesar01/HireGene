@@ -15,6 +15,9 @@ export default function Footer() {
             </span>
           </div>
           <nav className="flex items-center gap-5 text-xs text-muted">
+            <Link href="/top-companies" className="hover:text-foreground transition-colors">
+              Top Companies
+            </Link>
             <Link href="/about" className="hover:text-foreground transition-colors">
               About
             </Link>

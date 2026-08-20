@@ -130,6 +130,21 @@ function buildOpenApiSpec(baseUrl: string) {
         },
       },
     },
+    "/api/profile/public/{slug}/file": {
+      get: {
+        summary: "Download the original uploaded resume PDF",
+        parameters: [
+          { name: "slug", in: "path", required: true, schema: { type: "string" } },
+        ],
+        responses: {
+          "200": {
+            description: "Original PDF bytes",
+            content: { "application/pdf": { schema: { type: "string", format: "binary" } } },
+          },
+          "404": { description: "No PDF stored for this resume" },
+        },
+      },
+    },
     "/api/profile/outreach": {
       post: {
         summary: "Draft a LinkedIn or X DM from the user's resume and a job post",

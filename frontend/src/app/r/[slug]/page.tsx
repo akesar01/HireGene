@@ -47,10 +47,32 @@ export default async function PublicResumePage({
         ) : (
           <>
             <p className="text-[10px] font-bold uppercase tracking-wider text-muted mb-1">Resume</p>
-            <h1 className="text-2xl font-bold text-foreground tracking-tight mb-6">
-              {profile.contact.name || profile.filterSummary.currentTitle || "Candidate"}
-            </h1>
-            <ResumeDisplay profile={profile} />
+            <div className="flex items-start justify-between gap-4 flex-wrap mb-6">
+              <h1 className="text-2xl font-bold text-foreground tracking-tight">
+                {profile.contact.name || profile.filterSummary.currentTitle || "Candidate"}
+              </h1>
+              {profile.pdfUrl && (
+                <a
+                  href={profile.pdfUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-card-border bg-surface text-foreground hover:border-accent/40"
+                >
+                  Download PDF
+                </a>
+              )}
+            </div>
+            {profile.hasPdf && profile.pdfUrl ? (
+              <div className="bg-card-bg border border-card-border rounded-xl overflow-hidden shadow-card">
+                <iframe
+                  title="Resume PDF"
+                  src={profile.pdfUrl}
+                  className="w-full h-[80vh] bg-white"
+                />
+              </div>
+            ) : (
+              <ResumeDisplay profile={profile} />
+            )}
           </>
         )}
       </div>

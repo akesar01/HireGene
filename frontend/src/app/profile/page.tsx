@@ -115,7 +115,7 @@ export default function ProfilePage() {
               <ul className="space-y-2 text-xs text-muted leading-relaxed">
                 <li className="flex items-start gap-2">
                   <span className="text-accent shrink-0 mt-0.5">1.</span>
-                  <span>Upload your resume (PDF or TXT). We extract text and parse it with AI.</span>
+                  <span>Upload your resume as a PDF. We keep the original file and parse it with AI.</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-accent shrink-0 mt-0.5">2.</span>
@@ -127,7 +127,7 @@ export default function ProfilePage() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-accent shrink-0 mt-0.5">4.</span>
-                  <span>We host a shareable resume page from the parsed data. Draft DM and Connect note can include that link.</span>
+                  <span>We host your original PDF at a shareable link. Draft DM and Connect note include that same PDF.</span>
                 </li>
               </ul>
             </div>
@@ -148,7 +148,9 @@ export default function ProfilePage() {
               />
             </div>
 
-            {profile.resumeUrl && <ResumeShareLink url={profile.resumeUrl} />}
+            {profile.resumeUrl && (
+              <ResumeShareLink url={profile.resumeUrl} hasPdf={Boolean(profile.hasPdf)} />
+            )}
 
             {/* Parsed resume data */}
             <div>

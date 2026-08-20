@@ -11,13 +11,13 @@ interface HeaderProps {
 export default function Header({ liveJobsCount, maxWidth = "max-w-7xl" }: HeaderProps) {
   return (
     <header className="border-b border-card-border bg-card-bg sticky top-0 z-10">
-      <div className={`${maxWidth} mx-auto px-6 py-3 flex items-center justify-between`}>
-        <Link href="/" className="flex items-center gap-2">
+      <div className={`${maxWidth} mx-auto px-6 py-3 flex items-center justify-between gap-3`}>
+        <Link href="/" className="flex items-center gap-2 min-w-0">
           <img src="/logo.svg" alt="SkipTheBoard" width={24} height={24} className="shrink-0" />
-          <span className="text-lg font-bold text-foreground tracking-tight">SkipTheBoard</span>
-          <span className="hidden sm:inline text-xs text-muted">— stalk the poster, not the board</span>
+          <span className="text-lg font-bold text-foreground tracking-tight truncate">SkipTheBoard</span>
+          <span className="hidden md:inline text-xs text-muted">— stalk the poster, not the board</span>
         </Link>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4 shrink-0">
           {liveJobsCount !== undefined && (
             <span className="text-xs text-muted hidden sm:inline">
               <span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1.5 align-middle" />
@@ -25,8 +25,15 @@ export default function Header({ liveJobsCount, maxWidth = "max-w-7xl" }: Header
             </span>
           )}
           <Link
+            href="/top-companies"
+            className="text-sm font-medium text-muted hover:text-foreground transition-colors whitespace-nowrap"
+          >
+            <span className="sm:hidden">Companies</span>
+            <span className="hidden sm:inline">Top Companies</span>
+          </Link>
+          <Link
             href="/submit"
-            className="inline-flex items-center gap-1 bg-accent text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-accent-hover transition-colors"
+            className="inline-flex items-center gap-1 bg-accent text-white text-sm font-semibold px-3 sm:px-4 py-2 rounded-lg hover:bg-accent-hover transition-colors"
           >
             + submit
           </Link>
@@ -38,12 +45,6 @@ export default function Header({ liveJobsCount, maxWidth = "max-w-7xl" }: Header
             </SignInButton>
           </Show>
           <Show when="signed-in">
-            <Link
-              href="/pricing"
-              className="text-sm font-medium text-muted hover:text-foreground transition-colors"
-            >
-              Pricing
-            </Link>
             <Link
               href="/profile"
               className="text-sm font-medium text-muted hover:text-foreground transition-colors"

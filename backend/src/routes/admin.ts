@@ -55,7 +55,7 @@ admin.post("/recruiter", async (c) => {
 // GET /api/admin/recruiters — list all recruiters
 admin.get("/recruiters", async (c) => {
   const recruiters = await prisma.recruiter.findMany({
-    orderBy: { addedAt: "desc" },
+    orderBy: { lastScrapedAt: { sort: "asc", nulls: "first" } },
   });
 
   return c.json({

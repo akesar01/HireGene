@@ -12,6 +12,11 @@ import {
   resolveOpenUrl,
   type OutreachProfile,
 } from "../lib/outreach-draft.js";
+import {
+  isPdfBuffer,
+  loadResumePdfBySlug,
+  saveResumePdf,
+} from "../lib/resume-storage.js";
 
 type Variables = {
   userId: string | null;
@@ -28,6 +33,8 @@ interface ProfileDoc {
   skills: ResumeData["skills"];
   filterSummary: ResumeData["filterSummary"];
   shareSlug?: string;
+  resumeFileId?: string;
+  resumeFileName?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -55,6 +62,11 @@ function newShareSlug(): string {
 function publicResumeUrl(slug: string): string {
   const origin = (process.env.FRONTEND_URL ?? "https://skiptheboard.in").replace(/\/$/, "");
   return `${origin}/r/${slug}`;
+}
+
+function publicResumePdfUrl(c: { req: { url: string } }, slug: string): string {
+  const origin = new URL(c.req.url).origin;
+  return `${origin}/api/profile/public/${encodeURIComponent(slug)}/file`;
 }
 
 async function ensureShareSlug(
@@ -94,8 +106,30 @@ profile.get("/", async (c) => {
   }
 
   const shareSlug = await ensureShareSlug(collection, userId, doc.shareSlug);
+  const hasPdf = Boolean(doc.resumeFileId);
   return c.json({
-    profile: { ...doc, shareSlug, resumeUrl: publicResumeUrl(shareSlug) },
+    profile: {
+      ...doc,
+      shareSlug,
+      hasPdf,
+      resumeUrl: publicResumeUrl(shareSlug),
+      pdfUrl: hasPdf ? publicResumePdfUrl(c, shareSlug) : null,
+    },
+  });
+});
+
+// GET /api/profile/public/:slug/file — original uploaded PDF (no auth)
+profile.get("/public/:slug/file", async (c) => {
+  const slug = c.req.param("slug")?.trim();
+  if (!slug) return c.json({ error: "Not found" }, 404);
+
+  const file = await loadResumePdfBySlug(slug);
+  if (!file) return c.json({ error: "Resume PDF not found" }, 404);
+
+  return c.body(new Uint8Array(file.bytes), 200, {
+    "Content-Type": "application/pdf",
+    "Content-Disposition": `inline; filename="${file.fileName}"`,
+    "Cache-Control": "private, max-age=300",
   });
 });
 
@@ -112,6 +146,7 @@ profile.get("/public/:slug", async (c) => {
   const doc = await collection.findOne({ shareSlug: slug } as any);
   if (!doc) return c.json({ error: "Not found" }, 404);
 
+  const hasPdf = Boolean(doc.resumeFileId);
   return c.json({
     profile: {
       contact: {
@@ -128,6 +163,8 @@ profile.get("/public/:slug", async (c) => {
       certifications: doc.certifications ?? [],
       skills: doc.skills,
       filterSummary: doc.filterSummary,
+      hasPdf,
+      pdfUrl: hasPdf ? publicResumePdfUrl(c, slug) : null,
     },
   });
 });
@@ -169,12 +206,16 @@ profile.post("/resume", async (c) => {
     return c.json({ error: "Only PDF and TXT files are supported" }, 400);
   }
 
-  // Extract text
+  // Extract text and keep the original PDF bytes for sharing
   let text: string;
+  let pdfBytes: Buffer | null = null;
   try {
     if (isPdf) {
-      const buffer = Buffer.from(await file.arrayBuffer());
-      text = await extractTextFromPDF(buffer);
+      pdfBytes = Buffer.from(await file.arrayBuffer());
+      if (!isPdfBuffer(pdfBytes)) {
+        return c.json({ error: "That file is not a valid PDF." }, 400);
+      }
+      text = await extractTextFromPDF(pdfBytes);
     } else {
       text = await file.text();
     }
@@ -211,8 +252,36 @@ profile.post("/resume", async (c) => {
 
   const savedDoc = await collection.findOne({ _id: userId } as any);
   const shareSlug = await ensureShareSlug(collection, userId, (savedDoc as ProfileDoc | null)?.shareSlug);
+
+  let resumeFileId = savedDoc?.resumeFileId;
+  let resumeFileName = savedDoc?.resumeFileName;
+  if (pdfBytes) {
+    resumeFileId = await saveResumePdf({
+      userId,
+      shareSlug,
+      fileName: file.name,
+      bytes: pdfBytes,
+    });
+    resumeFileName = file.name;
+    await collection.updateOne(
+      { _id: userId } as any,
+      { $set: { resumeFileId, resumeFileName, updatedAt: new Date() } },
+    );
+  }
+
+  const hasPdf = Boolean(resumeFileId);
   return c.json({
-    profile: savedDoc ? { ...savedDoc, shareSlug, resumeUrl: publicResumeUrl(shareSlug) } : savedDoc,
+    profile: savedDoc
+      ? {
+          ...savedDoc,
+          shareSlug,
+          resumeFileId,
+          resumeFileName,
+          hasPdf,
+          resumeUrl: publicResumeUrl(shareSlug),
+          pdfUrl: hasPdf ? publicResumePdfUrl(c, shareSlug) : null,
+        }
+      : savedDoc,
   });
 });
 

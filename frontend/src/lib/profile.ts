@@ -52,6 +52,9 @@ export interface ResumeProfile {
   filterSummary: FilterSummary;
   shareSlug?: string;
   resumeUrl?: string;
+  hasPdf?: boolean;
+  pdfUrl?: string | null;
+  resumeFileName?: string;
   createdAt?: string;
   updatedAt?: string;
 }

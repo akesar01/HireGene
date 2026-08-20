@@ -2,7 +2,13 @@
 
 import { useState } from "react";
 
-export default function ResumeShareLink({ url }: { url: string }) {
+export default function ResumeShareLink({
+  url,
+  hasPdf = false,
+}: {
+  url: string;
+  hasPdf?: boolean;
+}) {
   const [copied, setCopied] = useState(false);
 
   async function copy() {
@@ -19,7 +25,9 @@ export default function ResumeShareLink({ url }: { url: string }) {
     <div className="bg-card-bg border border-card-border rounded-xl p-4 shadow-card">
       <p className="text-xs font-bold uppercase tracking-wider text-foreground mb-1">Resume link</p>
       <p className="text-xs text-muted mb-3">
-        This is a hosted page from your uploaded resume. Draft DM and Connect note will include it.
+        {hasPdf
+          ? "Hiring managers get your original uploaded PDF at this link. Draft DM and Connect note include it."
+          : "Re-upload a PDF to share the real file. Right now this link shows extracted text only."}
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <a
