@@ -3,12 +3,30 @@ import { prisma } from "./prisma.js";
 import { classifyPost } from "./llm-classifier.js";
 import { computeExpiresAt, isJobExpired, jobExpiryCutoff } from "./job-expiry.js";
 import { inferCompany } from "./extract-company.js";
+import { isOpenApifyStatus, parseApifyDataset } from "./apify-parse.js";
+
+export { isOpenApifyStatus, parseApifyDataset } from "./apify-parse.js";
 
 const ACTOR_ID = "atomus~linkedin-posts-scraper-pro";
-const MAX_POSTS = 5; // Only scrape the 5 most recent posts
-
+const MAX_POSTS = 5;
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function apifyToken(): string {
+  const token = process.env.APIFY_TOKEN || process.env.APIFY_API_KEY;
+  if (!token) throw new Error("APIFY_TOKEN is not set");
+  return token;
+}
+
+function waitMs(): number {
+  const parsed = Number(process.env.APIFY_WAIT_MS ?? 180_000);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 180_000;
+}
+
+function pollEveryMs(): number {
+  const parsed = Number(process.env.APIFY_POLL_MS ?? 5_000);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 5_000;
 }
 
 interface ApifyAuthor {
@@ -34,17 +52,16 @@ interface ApifyUrn {
   ugcPost_urn?: string | null;
 }
 
-interface ApifyPost {
-  // Shared fields
+export interface ApifyPost {
   text?: string;
-  content?: string; // atomus async output uses 'content' instead of 'text'
+  content?: string;
   url?: string;
-  post_url?: string; // atomus async output uses 'post_url' instead of 'url'
+  post_url?: string;
   post_type?: string;
-  type?: string; // atomus async output uses 'type' for post type
+  type?: string;
   author?: ApifyAuthor;
-  author_name?: string; // atomus async output has flat author_name
-  profile_picture?: string; // atomus async output has flat profile_picture
+  author_name?: string;
+  profile_picture?: string;
   stats?: ApifyStats;
   comments?: number;
   reposts?: number;
@@ -54,42 +71,47 @@ interface ApifyPost {
     date?: string;
     timestamp?: number;
     relative?: string;
-  } | string; // atomus async output has posted_at as ISO string
+  } | string;
   reshared_post?: unknown;
   full_urn?: string;
   urn?: string | ApifyUrn;
+  posts?: ApifyPost[];
 }
 
-interface ApifyResponse {
-  success?: boolean;
-  data?: {
-    posts?: ApifyPost[];
-  };
+export interface ScrapeDetail {
+  recruiterId: number;
+  apifyRunId: string;
+  status: string;
+  postsFound: number;
+  jobsCreated: number;
+  jobsSkipped: number;
+  pending?: boolean;
+}
+
+export interface ScrapeResult {
+  scraped: number;
+  jobsCreated: number;
+  jobsSkipped: number;
+  pending?: boolean;
+  details: ScrapeDetail[];
 }
 
 export async function scrapeRecruiter(recruiter: {
   id: number;
   name: string;
   linkedinUrl: string;
-}): Promise<{
-  scraped: number;
-  jobsCreated: number;
-  jobsSkipped: number;
-  details: Array<{
-    recruiterId: number;
-    apifyRunId: string;
-    status: string;
-    postsFound: number;
-    jobsCreated: number;
-    jobsSkipped: number;
-  }>;
-}> {
-  const token = process.env.APIFY_TOKEN;
-  if (!token) throw new Error("APIFY_TOKEN is not set");
+}): Promise<ScrapeResult> {
+  const existing = await findOpenRun(recruiter.id);
+  const runId = existing?.apifyRunId ?? (await startApifyRun(recruiter));
+  return waitAndIngest(recruiter, runId, waitMs());
+}
 
+export async function startApifyRun(recruiter: {
+  id: number;
+  linkedinUrl: string;
+}): Promise<string> {
+  const token = apifyToken();
   const startedAt = new Date();
-
-  // Start async run — sync endpoint returns empty for this actor
   const startRes = await fetch(
     `https://api.apify.com/v2/acts/${ACTOR_ID}/runs?token=${token}`,
     {
@@ -108,59 +130,208 @@ export async function scrapeRecruiter(recruiter: {
 
   if (!startRes.ok) {
     const errBody = await startRes.text();
-    await logRun(recruiter.id, "FAILED", 0, 0, 0, startedAt, new Date(), `${startRes.status} ${errBody}`);
+    await upsertRunLog({
+      recruiterId: recruiter.id,
+      apifyRunId: `failed_${Date.now()}_${recruiter.id}`,
+      status: "FAILED",
+      postsFound: 0,
+      jobsCreated: 0,
+      jobsSkipped: 0,
+      startedAt,
+      finishedAt: new Date(),
+      errorMsg: `${startRes.status} ${errBody}`,
+    });
     throw new Error(`Apify run start failed: ${startRes.status} ${errBody}`);
   }
 
-  const runData = await startRes.json() as { data: { id: string; defaultDatasetId: string } };
+  const runData = (await startRes.json()) as { data: { id: string } };
   const runId = runData.data.id;
-  const datasetId = runData.data.defaultDatasetId;
+  await upsertRunLog({
+    recruiterId: recruiter.id,
+    apifyRunId: runId,
+    status: "RUNNING",
+    postsFound: 0,
+    jobsCreated: 0,
+    jobsSkipped: 0,
+    startedAt,
+    finishedAt: null,
+  });
+  return runId;
+}
 
-  // Poll for completion (max 60 seconds)
+export async function finishPendingRuns(options: {
+  budgetMs?: number;
+} = {}): Promise<ScrapeDetail[]> {
+  const budgetMs = options.budgetMs ?? waitMs();
+  const deadline = Date.now() + budgetMs;
+  const open = await prisma.apifyRunLog.findMany({
+    where: { status: { in: ["RUNNING", "READY"] } },
+    orderBy: { startedAt: "asc" },
+  });
+
+  const details: ScrapeDetail[] = [];
+  for (const run of open) {
+    if (Date.now() >= deadline) break;
+    if (!run.recruiterId) continue;
+    const recruiter = await prisma.recruiter.findUnique({
+      where: { id: run.recruiterId },
+      select: { id: true, name: true, linkedinUrl: true },
+    });
+    if (!recruiter) continue;
+    const remaining = Math.max(deadline - Date.now(), pollEveryMs());
+    const result = await waitAndIngest(recruiter, run.apifyRunId, remaining);
+    details.push(...result.details);
+  }
+  return details;
+}
+
+export async function recruiterIdsWithOpenRuns(): Promise<number[]> {
+  const rows = await prisma.apifyRunLog.findMany({
+    where: { status: { in: ["RUNNING", "READY"] }, recruiterId: { not: null } },
+    select: { recruiterId: true },
+  });
+  return rows.map((row) => row.recruiterId!).filter((id) => id > 0);
+}
+
+async function findOpenRun(recruiterId: number) {
+  return prisma.apifyRunLog.findFirst({
+    where: { recruiterId, status: { in: ["RUNNING", "READY"] } },
+    orderBy: { startedAt: "desc" },
+  });
+}
+
+export async function waitAndIngest(
+  recruiter: { id: number; name: string; linkedinUrl: string },
+  runId: string,
+  maxWaitMs: number,
+): Promise<ScrapeResult> {
+  const token = apifyToken();
+  const deadline = Date.now() + maxWaitMs;
   let status = "RUNNING";
-  for (let i = 0; i < 20; i++) {
-    await sleep(3000);
+  let datasetId = "";
+
+  while (Date.now() < deadline) {
     const statusRes = await fetch(
       `https://api.apify.com/v2/acts/${ACTOR_ID}/runs/${runId}?token=${token}`,
     );
-    const statusData = await statusRes.json() as { data: { status: string; defaultDatasetId: string } };
+    if (!statusRes.ok) {
+      await sleep(pollEveryMs());
+      continue;
+    }
+    const statusData = (await statusRes.json()) as {
+      data: { status: string; defaultDatasetId?: string };
+    };
     status = statusData.data.status;
-    if (status === "SUCCEEDED" || status === "FAILED") {
-      // Update datasetId in case it wasn't in the start response
-      if (statusData.data.defaultDatasetId) {
-        // datasetId already set from start response
-      }
+    datasetId = statusData.data.defaultDatasetId ?? datasetId;
+    if (status === "SUCCEEDED" || status === "FAILED" || status === "ABORTED" || status === "TIMED-OUT") {
       break;
     }
+    await sleep(pollEveryMs());
   }
 
   if (status !== "SUCCEEDED") {
-    await logRun(recruiter.id, "FAILED", 0, 0, 0, startedAt, new Date(), `Run status: ${status}`);
+    if (isOpenApifyStatus(status) || status === "RUNNING") {
+      await upsertRunLog({
+        recruiterId: recruiter.id,
+        apifyRunId: runId,
+        status: "RUNNING",
+        postsFound: 0,
+        jobsCreated: 0,
+        jobsSkipped: 0,
+        startedAt: new Date(),
+        finishedAt: null,
+        errorMsg: `Still ${status}; will ingest on next cron`,
+      });
+      return {
+        scraped: 1,
+        jobsCreated: 0,
+        jobsSkipped: 0,
+        pending: true,
+        details: [{
+          recruiterId: recruiter.id,
+          apifyRunId: runId,
+          status: "RUNNING",
+          postsFound: 0,
+          jobsCreated: 0,
+          jobsSkipped: 0,
+          pending: true,
+        }],
+      };
+    }
+    await upsertRunLog({
+      recruiterId: recruiter.id,
+      apifyRunId: runId,
+      status: "FAILED",
+      postsFound: 0,
+      jobsCreated: 0,
+      jobsSkipped: 0,
+      startedAt: new Date(),
+      finishedAt: new Date(),
+      errorMsg: `Run status: ${status}`,
+    });
     throw new Error(`Apify run did not succeed: ${status}`);
   }
 
-  // Fetch dataset items using the dataset ID from the run
+  if (!datasetId) {
+    throw new Error(`Apify run ${runId} succeeded with no dataset id`);
+  }
+
   const datasetRes = await fetch(
     `https://api.apify.com/v2/datasets/${datasetId}/items?token=${token}`,
   );
-
   if (!datasetRes.ok) {
     const errBody = await datasetRes.text();
-    await logRun(recruiter.id, "FAILED", 0, 0, 0, startedAt, new Date(), `${datasetRes.status} ${errBody}`);
+    await upsertRunLog({
+      recruiterId: recruiter.id,
+      apifyRunId: runId,
+      status: "FAILED",
+      postsFound: 0,
+      jobsCreated: 0,
+      jobsSkipped: 0,
+      startedAt: new Date(),
+      finishedAt: new Date(),
+      errorMsg: `${datasetRes.status} ${errBody}`,
+    });
     throw new Error(`Apify dataset fetch failed: ${datasetRes.status} ${errBody}`);
   }
 
-  const rawBody = await datasetRes.json() as ApifyResponse | ApifyPost[];
+  const posts = parseApifyDataset(await datasetRes.json());
+  const { jobsCreated, jobsSkipped } = await ingestPosts(recruiter, posts);
 
-  let posts: ApifyPost[];
-  if (Array.isArray(rawBody)) {
-    posts = rawBody;
-  } else if (rawBody.data?.posts) {
-    posts = rawBody.data.posts;
-  } else {
-    posts = [];
-  }
+  await upsertRunLog({
+    recruiterId: recruiter.id,
+    apifyRunId: runId,
+    status: "SUCCEEDED",
+    postsFound: posts.length,
+    jobsCreated,
+    jobsSkipped,
+    startedAt: new Date(),
+    finishedAt: new Date(),
+  });
+  await prisma.recruiter.update({
+    where: { id: recruiter.id },
+    data: { lastScrapedAt: new Date() },
+  });
 
+  return {
+    scraped: 1,
+    jobsCreated,
+    jobsSkipped,
+    details: [{
+      recruiterId: recruiter.id,
+      apifyRunId: runId,
+      status: "SUCCEEDED",
+      postsFound: posts.length,
+      jobsCreated,
+      jobsSkipped,
+    }],
+  };
+}
+
+async function ingestPosts(
+  recruiter: { id: number; name: string },
+  posts: ApifyPost[],
+): Promise<{ jobsCreated: number; jobsSkipped: number }> {
   let jobsCreated = 0;
   let jobsSkipped = 0;
 
@@ -174,8 +345,6 @@ export async function scrapeRecruiter(recruiter: {
     }
 
     const authorHeadline = post.author?.headline ?? "";
-
-    // LLM classification (falls back to regex if no API key or LLM fails)
     const classification = await classifyPost(rawText, authorHeadline);
 
     if (!classification.isJobPost) {
@@ -184,10 +353,10 @@ export async function scrapeRecruiter(recruiter: {
     }
 
     const contentHash = createHash("sha256").update(rawText.trim().toLowerCase()).digest("hex");
-
-    // Parse posted date — timestamp is in milliseconds, or posted_at may be an ISO string
-    const postedTimestamp = typeof post.posted_at === 'object' ? post.posted_at?.timestamp : undefined;
-    const postedDateStr = typeof post.posted_at === 'object' ? post.posted_at?.date : (typeof post.posted_at === 'string' ? post.posted_at : undefined);
+    const postedTimestamp = typeof post.posted_at === "object" ? post.posted_at?.timestamp : undefined;
+    const postedDateStr = typeof post.posted_at === "object"
+      ? post.posted_at?.date
+      : (typeof post.posted_at === "string" ? post.posted_at : undefined);
     const postedDate = postedTimestamp
       ? new Date(postedTimestamp)
       : postedDateStr
@@ -199,14 +368,12 @@ export async function scrapeRecruiter(recruiter: {
     }
 
     const expiresAt = computeExpiresAt(postedDate);
-
     const authorName = post.author
       ? (post.author.name ?? `${post.author.first_name ?? ""} ${post.author.last_name ?? ""}`.trim())
       : post.author_name ?? recruiter.name;
     const authorAvatar = post.author?.avatar ?? post.author?.profile_picture ?? post.profile_picture ?? null;
     const isRepost = post.is_repost ?? (post.post_type === "repost" || post.type === "repost") ?? !!post.reshared_post;
     const company = await resolveJobCompany(authorHeadline, rawText, recruiter.id);
-
     const existing = await prisma.job.findUnique({ where: { sourceUrl } });
 
     if (existing) {
@@ -214,7 +381,6 @@ export async function scrapeRecruiter(recruiter: {
         jobsSkipped++;
         continue;
       }
-      // Post was edited — update
       await prisma.job.update({
         where: { id: existing.id },
         data: {
@@ -238,7 +404,6 @@ export async function scrapeRecruiter(recruiter: {
       continue;
     }
 
-    // Insert new job
     await prisma.job.create({
       data: {
         recruiterId: recruiter.id,
@@ -266,25 +431,7 @@ export async function scrapeRecruiter(recruiter: {
     jobsCreated++;
   }
 
-  await logRun(recruiter.id, "SUCCEEDED", posts.length, jobsCreated, jobsSkipped, startedAt, new Date(), undefined, runId);
-  await prisma.recruiter.update({
-    where: { id: recruiter.id },
-    data: { lastScrapedAt: new Date() },
-  });
-
-  return {
-    scraped: 1,
-    jobsCreated,
-    jobsSkipped,
-    details: [{
-      recruiterId: recruiter.id,
-      apifyRunId: runId,
-      status: "SUCCEEDED",
-      postsFound: posts.length,
-      jobsCreated,
-      jobsSkipped,
-    }],
-  };
+  return { jobsCreated, jobsSkipped };
 }
 
 async function resolveJobCompany(
@@ -312,30 +459,39 @@ async function resolveJobCompany(
   });
 }
 
-async function logRun(
-  recruiterId: number,
-  status: string,
-  postsFound: number,
-  jobsCreated: number,
-  jobsSkipped: number,
-  startedAt: Date,
-  finishedAt: Date,
-  errorMsg?: string,
-  apifyRunId?: string,
-) {
-  await prisma.apifyRunLog.create({
-    data: {
-      recruiterId,
-      apifyRunId: apifyRunId ?? `run_${Date.now()}_${recruiterId}`,
+async function upsertRunLog(row: {
+  recruiterId: number;
+  apifyRunId: string;
+  status: string;
+  postsFound: number;
+  jobsCreated: number;
+  jobsSkipped: number;
+  startedAt: Date;
+  finishedAt: Date | null;
+  errorMsg?: string;
+}) {
+  await prisma.apifyRunLog.upsert({
+    where: { apifyRunId: row.apifyRunId },
+    create: {
+      recruiterId: row.recruiterId,
+      apifyRunId: row.apifyRunId,
       actorId: ACTOR_ID,
       source: "linkedin",
-      status,
-      postsFound,
-      jobsCreated,
-      jobsSkipped,
-      startedAt,
-      finishedAt,
-      errorMsg: errorMsg ?? null,
+      status: row.status,
+      postsFound: row.postsFound,
+      jobsCreated: row.jobsCreated,
+      jobsSkipped: row.jobsSkipped,
+      startedAt: row.startedAt,
+      finishedAt: row.finishedAt,
+      errorMsg: row.errorMsg ?? null,
+    },
+    update: {
+      status: row.status,
+      postsFound: row.postsFound,
+      jobsCreated: row.jobsCreated,
+      jobsSkipped: row.jobsSkipped,
+      finishedAt: row.finishedAt,
+      errorMsg: row.errorMsg ?? null,
     },
   });
 }

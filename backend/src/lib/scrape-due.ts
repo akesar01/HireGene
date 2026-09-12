@@ -1,4 +1,10 @@
-import { scrapeRecruiter } from "./apify.js";
+import {
+  finishPendingRuns,
+  recruiterIdsWithOpenRuns,
+  startApifyRun,
+  waitAndIngest,
+  type ScrapeResult,
+} from "./apify.js";
 import { prisma } from "./prisma.js";
 import {
   hasBudgetForAnotherScrape,
@@ -12,7 +18,7 @@ export interface DueScrapeResult {
   picked: RecruiterSchedule | null;
   dueCount: number;
   remaining: number;
-  result: Awaited<ReturnType<typeof scrapeRecruiter>> | null;
+  result: ScrapeResult | null;
   error: string | null;
 }
 
@@ -32,15 +38,18 @@ export async function loadActiveRecruiters(): Promise<RecruiterSchedule[]> {
 }
 
 export async function scrapeNextDue(excludeIds: number[] = []): Promise<DueScrapeResult> {
+  const inFlight = await recruiterIdsWithOpenRuns();
+  const blocked = [...excludeIds, ...inFlight];
   const recruiters = await loadActiveRecruiters();
-  const { picked, dueCount } = pickDueRecruiter(recruiters, excludeIds);
+  const { picked, dueCount } = pickDueRecruiter(recruiters, blocked);
 
   if (!picked) {
     return { picked: null, dueCount: 0, remaining: 0, result: null, error: null };
   }
 
   try {
-    const result = await scrapeRecruiter(picked);
+    const runId = await startApifyRun(picked);
+    const result = await waitAndIngest(picked, runId, 15_000);
     return {
       picked,
       dueCount,
@@ -66,6 +75,7 @@ export interface ScrapeBatchItem {
   ok: boolean;
   jobsCreated: number;
   jobsSkipped: number;
+  pending?: boolean;
   error: string | null;
 }
 
@@ -75,6 +85,7 @@ export interface ScrapeBatchSummary {
   failed: number;
   remaining: number;
   exhaustedBudget: boolean;
+  pending: number;
   results: ScrapeBatchItem[];
 }
 
@@ -85,70 +96,139 @@ export async function scrapeDueBatch(options: {
   const once = options.once ?? false;
   const budgetMs = options.budgetMs ?? DEFAULT_BATCH_BUDGET_MS;
   const startedAtMs = Date.now();
-  const excludeIds: number[] = [];
   const results: ScrapeBatchItem[] = [];
 
+  const pendingFirst = await finishPendingRuns({
+    budgetMs: Math.min(60_000, budgetMs),
+  });
+  for (const detail of pendingFirst) {
+    const recruiter = await prisma.recruiter.findUnique({
+      where: { id: detail.recruiterId },
+      select: { name: true },
+    });
+    results.push({
+      recruiterId: detail.recruiterId,
+      name: recruiter?.name ?? `#${detail.recruiterId}`,
+      ok: detail.status === "SUCCEEDED" || detail.pending === true,
+      jobsCreated: detail.jobsCreated,
+      jobsSkipped: detail.jobsSkipped,
+      pending: detail.pending,
+      error: detail.status === "FAILED" ? `Run ${detail.apifyRunId} ${detail.status}` : null,
+    });
+  }
+
+  const excludeIds: number[] = await recruiterIdsWithOpenRuns();
   const initial = pickDueRecruiter(await loadActiveRecruiters(), excludeIds);
   const dueBefore = initial.dueCount;
 
-  if (!initial.picked) {
-    return {
-      dueBefore: 0,
-      processed: 0,
-      failed: 0,
-      remaining: 0,
-      exhaustedBudget: false,
-      results,
-    };
-  }
-
-  while (true) {
-    if (results.length > 0 && !hasBudgetForAnotherScrape(startedAtMs, budgetMs)) {
-      const leftover = pickDueRecruiter(await loadActiveRecruiters(), excludeIds);
-      return {
-        dueBefore,
-        processed: results.filter((item) => item.ok).length,
-        failed: results.filter((item) => !item.ok).length,
-        remaining: leftover.dueCount,
-        exhaustedBudget: true,
-        results,
-      };
-    }
-
+  if (once) {
     const outcome = await scrapeNextDue(excludeIds);
-    if (!outcome.picked) {
-      return {
-        dueBefore,
-        processed: results.filter((item) => item.ok).length,
-        failed: results.filter((item) => !item.ok).length,
-        remaining: 0,
-        exhaustedBudget: false,
-        results,
-      };
+    if (outcome.picked) {
+      results.push(itemFromOutcome(outcome));
     }
-
-    if (outcome.error) {
-      excludeIds.push(outcome.picked.id);
-    }
-
-    results.push({
-      recruiterId: outcome.picked.id,
-      name: outcome.picked.name,
-      ok: outcome.error === null,
-      jobsCreated: outcome.result?.jobsCreated ?? 0,
-      jobsSkipped: outcome.result?.jobsSkipped ?? 0,
-      error: outcome.error,
-    });
-
-    if (once) {
-      return {
-        dueBefore,
-        processed: results.filter((item) => item.ok).length,
-        failed: results.filter((item) => !item.ok).length,
-        remaining: outcome.remaining,
-        exhaustedBudget: false,
-        results,
-      };
-    }
+    return summary(dueBefore, results, outcome.remaining, false);
   }
+
+  while (hasBudgetForAnotherScrape(startedAtMs, budgetMs)) {
+    const inFlight = await recruiterIdsWithOpenRuns();
+    const { picked, dueCount } = pickDueRecruiter(
+      await loadActiveRecruiters(),
+      [...excludeIds, ...inFlight],
+    );
+    if (!picked) break;
+
+    try {
+      const runId = await startApifyRun(picked);
+      excludeIds.push(picked.id);
+      results.push({
+        recruiterId: picked.id,
+        name: picked.name,
+        ok: true,
+        jobsCreated: 0,
+        jobsSkipped: 0,
+        pending: true,
+        error: null,
+      });
+      void runId;
+    } catch (err) {
+      excludeIds.push(picked.id);
+      results.push({
+        recruiterId: picked.id,
+        name: picked.name,
+        ok: false,
+        jobsCreated: 0,
+        jobsSkipped: 0,
+        error: err instanceof Error ? err.message : "Unknown error",
+      });
+    }
+
+    if (dueCount <= 1) break;
+  }
+
+  const leftoverMs = Math.max(startedAtMs + budgetMs - Date.now(), 20_000);
+  const ingested = await finishPendingRuns({ budgetMs: leftoverMs });
+  mergeIngested(results, ingested);
+
+  const leftover = pickDueRecruiter(
+    await loadActiveRecruiters(),
+    await recruiterIdsWithOpenRuns(),
+  );
+  const exhaustedBudget = leftover.dueCount > 0 && !hasBudgetForAnotherScrape(startedAtMs, budgetMs);
+  return summary(dueBefore, results, leftover.dueCount, exhaustedBudget);
+}
+
+function itemFromOutcome(outcome: DueScrapeResult): ScrapeBatchItem {
+  const picked = outcome.picked!;
+  return {
+    recruiterId: picked.id,
+    name: picked.name,
+    ok: outcome.error === null,
+    jobsCreated: outcome.result?.jobsCreated ?? 0,
+    jobsSkipped: outcome.result?.jobsSkipped ?? 0,
+    pending: outcome.result?.pending,
+    error: outcome.error,
+  };
+}
+
+function mergeIngested(
+  results: ScrapeBatchItem[],
+  ingested: Awaited<ReturnType<typeof finishPendingRuns>>,
+) {
+  for (const detail of ingested) {
+    const existing = results.find((item) => item.recruiterId === detail.recruiterId);
+    if (existing) {
+      existing.jobsCreated = detail.jobsCreated;
+      existing.jobsSkipped = detail.jobsSkipped;
+      existing.pending = detail.pending;
+      existing.ok = detail.status === "SUCCEEDED" || detail.pending === true;
+      if (detail.status === "SUCCEEDED") existing.error = null;
+      continue;
+    }
+    results.push({
+      recruiterId: detail.recruiterId,
+      name: `#${detail.recruiterId}`,
+      ok: detail.status === "SUCCEEDED" || detail.pending === true,
+      jobsCreated: detail.jobsCreated,
+      jobsSkipped: detail.jobsSkipped,
+      pending: detail.pending,
+      error: null,
+    });
+  }
+}
+
+function summary(
+  dueBefore: number,
+  results: ScrapeBatchItem[],
+  remaining: number,
+  exhaustedBudget: boolean,
+): ScrapeBatchSummary {
+  return {
+    dueBefore,
+    processed: results.filter((item) => item.ok && !item.pending).length,
+    failed: results.filter((item) => !item.ok).length,
+    remaining,
+    exhaustedBudget,
+    pending: results.filter((item) => item.pending).length,
+    results,
+  };
 }

@@ -312,9 +312,9 @@ function buildOpenApiSpec(baseUrl: string) {
       get: {
         summary: "Scrape the next due recruiter, then continue the rest in the background",
         description:
-          "Scrapes active recruiters whose lastScrapedAt is older than scrapeIntervalHours (or never scraped). " +
-          "Processes as many due recruiters as the function time budget allows in this single request. " +
-          "Does not self-call. Vercel Cron hits GET on a schedule. Manual callers may use GET or POST.",
+          "Starts Apify runs for all due recruiters (active, lastScrapedAt older than scrapeIntervalHours). " +
+          "Does not wait 60s per person: in-flight runs are stored and ingested when Apify SUCCEEDED. " +
+          "Also drains previously started runs. Remaining in-flight work is picked up on the next 15-minute cron tick.",
         security: [{ CronAuth: [] }, { AdminAuth: [] }],
         parameters: [
           { name: "once", in: "query", schema: { type: "string", enum: ["1", "true"] }, description: "Scrape only one due recruiter" },

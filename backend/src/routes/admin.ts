@@ -116,7 +116,12 @@ admin.post("/scrape", async (c) => {
 
   try {
     const result = await scrapeRecruiter(recruiter);
-    return c.json(result);
+    return c.json({
+      ...result,
+      message: result.pending
+        ? "Apify run started. Jobs will appear after the run finishes (next cron tick or refresh in a few minutes)."
+        : `Created ${result.jobsCreated} jobs, skipped ${result.jobsSkipped}.`,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return c.json({ error: `Scrape failed: ${message}` }, 500);

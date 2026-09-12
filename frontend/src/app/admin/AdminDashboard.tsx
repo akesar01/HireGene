@@ -162,7 +162,14 @@ export default function AdminDashboard() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Scrape failed");
-      // Refresh recruiter list to show updated lastScrapedAt
+      const created = data.jobsCreated ?? 0;
+      const skipped = data.jobsSkipped ?? 0;
+      const pending = data.pending === true;
+      setError(
+        pending
+          ? (data.message ?? "Run started in Apify. Listings update after ingest — wait a few minutes or hit cron.")
+          : `Scrape finished: ${created} new/updated jobs, ${skipped} skipped.`,
+      );
       fetchRecruiters();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unknown error");

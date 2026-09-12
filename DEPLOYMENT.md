@@ -132,9 +132,9 @@ npm run dev
 
 ### Daily recruiter scrape
 
-`backend/vercel.json` registers a Vercel Cron that hits `GET /api/cron/scrape` every day at 04:00 UTC. Vercel sends `Authorization: Bearer $CRON_SECRET` when that env var is set.
+`backend/vercel.json` registers a Vercel Cron that hits `GET /api/cron/scrape` every 15 minutes. Vercel sends `Authorization: Bearer $CRON_SECRET` when that env var is set.
 
-The endpoint scrapes due recruiters (active, and `lastScrapedAt` older than `scrapeIntervalHours`, default 24h) in a single request until a time budget is used. It does not call itself. Remaining due recruiters are picked up on the next cron tick.
+The endpoint starts Apify runs for every due recruiter (active, and `lastScrapedAt` older than `scrapeIntervalHours`, default 24h), then ingests any runs that have already SUCCEEDED. It does not wait for a slow LinkedIn scrape inside a 60s poll — unfinished runs stay `RUNNING` and are ingested on the next tick. Set `APIFY_WAIT_MS` (default 180000) if a manual admin scrape should wait longer in-request.
 
 Manual trigger (same auth as admin works too):
 

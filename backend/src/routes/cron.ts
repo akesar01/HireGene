@@ -32,7 +32,8 @@ async function handleScrape(c: Context) {
     if (item.ok) {
       console.log(
         `[cron] scrape: recruiter ${item.recruiterId} (${item.name}) ` +
-          `created=${item.jobsCreated} skipped=${item.jobsSkipped}`,
+          `created=${item.jobsCreated} skipped=${item.jobsSkipped}` +
+          `${item.pending ? " pending=true" : ""}`,
       );
     } else {
       console.error(
@@ -49,6 +50,7 @@ async function handleScrape(c: Context) {
       dueBefore: 0,
       remaining: 0,
       exhaustedBudget: false,
+      pending: 0,
       message: "No recruiters due",
       results: [],
     });
@@ -61,6 +63,7 @@ async function handleScrape(c: Context) {
     dueBefore: batch.dueBefore,
     remaining: batch.remaining,
     exhaustedBudget: batch.exhaustedBudget,
+    pending: batch.pending,
     results: batch.results,
   });
 }

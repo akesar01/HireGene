@@ -67,7 +67,7 @@ npm run dev
 - `DATABASE_URL` — PostgreSQL connection string
 - `API_KEY` — Shared API key for feed endpoints
 - `ADMIN_SECRET` — Bearer token for admin endpoints
-- `APIFY_API_KEY` — Apify API key for LinkedIn/X scraping
+- `APIFY_TOKEN` — Apify API token for LinkedIn/X scraping (`APIFY_API_KEY` is accepted as a fallback)
 - `GROQ_API_KEY` — Groq API key for AI-powered post enrichment
 - `CORS_ORIGIN` — Allowed frontend origin(s), comma-separated
 

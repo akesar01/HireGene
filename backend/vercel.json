@@ -15,7 +15,7 @@
     },
     {
       "path": "/api/cron/scrape",
-      "schedule": "0 4 * * *"
+      "schedule": "*/15 * * * *"
     }
   ]
 }
