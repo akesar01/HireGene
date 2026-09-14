@@ -1,9 +1,7 @@
 // Draft a LinkedIn/X DM from a parsed resume + job post.
 // Groq writes two specific options. A deterministic template is the fallback.
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const GROQ_MODEL = "llama-3.3-70b-versatile";
+import { groqApiKey, groqChatContent } from "./groq.js";
 
 export const CONNECT_NOTE_MAX = 300;
 export const MESSAGE_MAX = 1200;
@@ -536,36 +534,23 @@ async function requestDraft(
   const extra = retry
     ? "\n\nYour last draft was too salesy. Write a first-contact intro. No metric dump. Include resumeUrl if provided."
     : "";
-  const res = await fetch(GROQ_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${GROQ_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: GROQ_MODEL,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        {
-          role: "user",
-          content:
-            `Ammo pack. Use this, invent nothing.\n${JSON.stringify(ammo, null, 2)}\n\n` +
-            "Write two short first-contact DMs and a separate connection note. " +
-            "This is an introduction, not a pitch. Include resumeUrl when present." +
-            extra,
-        },
-      ],
-      temperature: retry ? 0.35 : 0.45,
-      max_tokens: 1100,
-      response_format: { type: "json_object" },
-    }),
+  const content = await groqChatContent({
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      {
+        role: "user",
+        content:
+          `Ammo pack. Use this, invent nothing.\n${JSON.stringify(ammo, null, 2)}\n\n` +
+          "Write two short first-contact DMs and a separate connection note. " +
+          "This is an introduction, not a pitch. Include resumeUrl when present." +
+          extra,
+      },
+    ],
+    temperature: retry ? 0.35 : 0.45,
+    max_tokens: 1100,
+    response_format: { type: "json_object" },
+    logPrefix: "[Outreach]",
   });
-  if (!res.ok) {
-    console.error(`[Outreach] Groq API error: ${res.status} ${await res.text()}`);
-    return null;
-  }
-  const data = await res.json();
-  const content = data.choices?.[0]?.message?.content;
   return typeof content === "string" ? parseOutreachResponse(content) : null;
 }
 
@@ -575,7 +560,7 @@ export async function generateOutreachDraft(
   resumeUrl = "",
 ): Promise<OutreachDraft> {
   const fallback = fallbackDraft(profile, job, resumeUrl);
-  if (!GROQ_API_KEY) return fallback;
+  if (!groqApiKey()) return fallback;
 
   try {
     const ammo = buildAmmoPack(profile, job, resumeUrl);

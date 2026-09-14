@@ -1,9 +1,6 @@
-// Resume parser using Groq (Llama 3.3 70B) — extracts full structured data from resume text.
-// Reuses the same Groq API pattern as llm-classifier.ts.
+// Resume parser using Groq — extracts structured data from resume text.
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const GROQ_MODEL = "llama-3.3-70b-versatile";
+import { groqApiKey, groqChatContent } from "./groq.js";
 
 // Must match Prisma enums — used for filterSummary
 const VALID_ROLE_FAMILIES = [
@@ -143,7 +140,7 @@ function emptyResumeData(): ResumeData {
 }
 
 export async function parseResume(text: string): Promise<ResumeData> {
-  if (!GROQ_API_KEY) {
+  if (!groqApiKey()) {
     console.warn("[Resume] No GROQ_API_KEY set — returning empty profile");
     return emptyResumeData();
   }
@@ -154,31 +151,16 @@ export async function parseResume(text: string): Promise<ResumeData> {
   }
 
   try {
-    const res = await fetch(GROQ_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${GROQ_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: GROQ_MODEL,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: `Resume text:\n${text}` },
-        ],
-        temperature: 0,
-        max_tokens: 2000,
-        response_format: { type: "json_object" },
-      }),
+    const content = await groqChatContent({
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: `Resume text:\n${text}` },
+      ],
+      temperature: 0,
+      max_tokens: 2000,
+      response_format: { type: "json_object" },
+      logPrefix: "[Resume]",
     });
-
-    if (!res.ok) {
-      console.error(`[Resume] Groq API error: ${res.status} ${await res.text()}`);
-      return emptyResumeData();
-    }
-
-    const data = await res.json();
-    const content = data.choices?.[0]?.message?.content;
     if (!content) {
       console.error("[Resume] Empty response from Groq");
       return emptyResumeData();

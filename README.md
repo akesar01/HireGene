@@ -68,7 +68,9 @@ npm run dev
 - `API_KEY` — Shared API key for feed endpoints
 - `ADMIN_SECRET` — Bearer token for admin endpoints
 - `APIFY_TOKEN` — Apify API token for LinkedIn/X scraping (`APIFY_API_KEY` is accepted as a fallback)
+- `APIFY_MAX_CONCURRENT` — Max simultaneous Apify runs (default 5, Apify free-plan cap)
 - `GROQ_API_KEY` — Groq API key for AI-powered post enrichment
+- `GROQ_MODEL` — Optional Groq model override (default `openai/gpt-oss-120b`)
 - `CORS_ORIGIN` — Allowed frontend origin(s), comma-separated
 
 ## API Endpoints

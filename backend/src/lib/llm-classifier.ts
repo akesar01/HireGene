@@ -1,5 +1,4 @@
-// LLM-based classifier using Groq (Llama 3.3 70B) — free, fast.
-// Falls back to regex classifier if LLM fails or no API key is set.
+// LLM-based classifier using Groq. Falls back to regex if LLM fails or no key.
 
 import {
   isJobPost as regexIsJobPost,
@@ -10,10 +9,7 @@ import {
   extractTechStack as regexExtractTechStack,
   extractDescription as regexExtractDescription,
 } from "./classifier.js";
-
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const GROQ_MODEL = "llama-3.3-70b-versatile";
+import { groqApiKey, groqChatContent } from "./groq.js";
 
 // Must match Prisma TechStack enum
 const VALID_TECH_STACKS = [
@@ -65,8 +61,7 @@ export async function classifyPost(
   text: string,
   authorHeadline?: string,
 ): Promise<LLMClassification> {
-  // If no API key, fall back to regex immediately
-  if (!GROQ_API_KEY) {
+  if (!groqApiKey()) {
     return regexFallback(text);
   }
 
@@ -75,31 +70,16 @@ export async function classifyPost(
       ? `Author headline: ${authorHeadline}\n\nPost text:\n${text}`
       : `Post text:\n${text}`;
 
-    const res = await fetch(GROQ_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${GROQ_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: GROQ_MODEL,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: userContent },
-        ],
-        temperature: 0,
-        max_tokens: 500,
-        response_format: { type: "json_object" },
-      }),
+    const content = await groqChatContent({
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: userContent },
+      ],
+      temperature: 0,
+      max_tokens: 500,
+      response_format: { type: "json_object" },
+      logPrefix: "[LLM]",
     });
-
-    if (!res.ok) {
-      console.error(`[LLM] Groq API error: ${res.status} ${await res.text()}`);
-      return regexFallback(text);
-    }
-
-    const data = await res.json();
-    const content = data.choices?.[0]?.message?.content;
     if (!content) {
       console.error("[LLM] Empty response from Groq");
       return regexFallback(text);

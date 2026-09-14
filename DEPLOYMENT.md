@@ -92,6 +92,10 @@ npx vercel env add CRON_SECRET production
 npx vercel env add API_KEY production
 npx vercel env add CORS_ORIGIN production
 npx vercel env add GROQ_API_KEY production
+npx vercel env add GROQ_MODEL production
+# Value: openai/gpt-oss-120b
+npx vercel env add APIFY_MAX_CONCURRENT production
+# Value: 5
 ```
 
 **`CORS_ORIGIN`** must be a comma-separated list of allowed origins:

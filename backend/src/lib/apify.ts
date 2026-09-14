@@ -3,6 +3,10 @@ import { prisma } from "./prisma.js";
 import { classifyPost } from "./llm-classifier.js";
 import { computeExpiresAt, isJobExpired, jobExpiryCutoff } from "./job-expiry.js";
 import { inferCompany } from "./extract-company.js";
+import {
+  ApifyConcurrentLimitError,
+  isApifyConcurrentLimitError,
+} from "./apify-limits.js";
 import { isOpenApifyStatus, parseApifyDataset } from "./apify-parse.js";
 
 export { isOpenApifyStatus, parseApifyDataset } from "./apify-parse.js";
@@ -130,6 +134,9 @@ export async function startApifyRun(recruiter: {
 
   if (!startRes.ok) {
     const errBody = await startRes.text();
+    if (isApifyConcurrentLimitError(startRes.status, errBody)) {
+      throw new ApifyConcurrentLimitError(startRes.status, errBody);
+    }
     await upsertRunLog({
       recruiterId: recruiter.id,
       apifyRunId: `failed_${Date.now()}_${recruiter.id}`,

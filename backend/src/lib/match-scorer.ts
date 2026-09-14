@@ -1,9 +1,6 @@
 // LLM match scorer using Groq — refines match scores for top jobs.
-// Reuses the same Groq API pattern as llm-classifier.ts.
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const GROQ_MODEL = "llama-3.3-70b-versatile";
+import { groqApiKey, groqChatContent } from "./groq.js";
 
 export interface MatchJobInput {
   id: string;
@@ -53,7 +50,7 @@ export async function refineMatches(
   profile: ProfileInput,
   jobs: MatchJobInput[],
 ): Promise<MatchResult[]> {
-  if (!GROQ_API_KEY || jobs.length === 0) {
+  if (!groqApiKey() || jobs.length === 0) {
     return [];
   }
 
@@ -84,31 +81,16 @@ export async function refineMatches(
 
     const userContent = `Candidate profile:\n${JSON.stringify(candidateSummary, null, 2)}\n\nJobs to score:\n${JSON.stringify(jobsSummary, null, 2)}`;
 
-    const res = await fetch(GROQ_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${GROQ_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: GROQ_MODEL,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: userContent },
-        ],
-        temperature: 0,
-        max_tokens: 1000,
-        response_format: { type: "json_object" },
-      }),
+    const content = await groqChatContent({
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: userContent },
+      ],
+      temperature: 0,
+      max_tokens: 1000,
+      response_format: { type: "json_object" },
+      logPrefix: "[Match]",
     });
-
-    if (!res.ok) {
-      console.error(`[Match] Groq API error: ${res.status} ${await res.text()}`);
-      return [];
-    }
-
-    const data = await res.json();
-    const content = data.choices?.[0]?.message?.content;
     if (!content) {
       console.error("[Match] Empty response from Groq");
       return [];

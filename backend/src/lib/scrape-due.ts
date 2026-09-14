@@ -5,6 +5,10 @@ import {
   waitAndIngest,
   type ScrapeResult,
 } from "./apify.js";
+import {
+  ApifyConcurrentLimitError,
+  remainingApifyStartSlots,
+} from "./apify-limits.js";
 import { prisma } from "./prisma.js";
 import {
   hasBudgetForAnotherScrape,
@@ -39,6 +43,16 @@ export async function loadActiveRecruiters(): Promise<RecruiterSchedule[]> {
 
 export async function scrapeNextDue(excludeIds: number[] = []): Promise<DueScrapeResult> {
   const inFlight = await recruiterIdsWithOpenRuns();
+  if (remainingApifyStartSlots(inFlight.length) <= 0) {
+    const { dueCount } = pickDueRecruiter(await loadActiveRecruiters(), excludeIds);
+    return {
+      picked: null,
+      dueCount,
+      remaining: dueCount,
+      result: null,
+      error: "Apify concurrent run limit reached",
+    };
+  }
   const blocked = [...excludeIds, ...inFlight];
   const recruiters = await loadActiveRecruiters();
   const { picked, dueCount } = pickDueRecruiter(recruiters, blocked);
@@ -58,6 +72,15 @@ export async function scrapeNextDue(excludeIds: number[] = []): Promise<DueScrap
       error: null,
     };
   } catch (err) {
+    if (err instanceof ApifyConcurrentLimitError) {
+      return {
+        picked,
+        dueCount,
+        remaining: dueCount,
+        result: null,
+        error: err.message,
+      };
+    }
     const message = err instanceof Error ? err.message : "Unknown error";
     return {
       picked,
@@ -131,6 +154,8 @@ export async function scrapeDueBatch(options: {
 
   while (hasBudgetForAnotherScrape(startedAtMs, budgetMs)) {
     const inFlight = await recruiterIdsWithOpenRuns();
+    if (remainingApifyStartSlots(inFlight.length) <= 0) break;
+
     const { picked, dueCount } = pickDueRecruiter(
       await loadActiveRecruiters(),
       [...excludeIds, ...inFlight],
@@ -151,6 +176,9 @@ export async function scrapeDueBatch(options: {
       });
       void runId;
     } catch (err) {
+      if (err instanceof ApifyConcurrentLimitError) {
+        break;
+      }
       excludeIds.push(picked.id);
       results.push({
         recruiterId: picked.id,
