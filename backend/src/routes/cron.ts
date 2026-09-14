@@ -1,8 +1,14 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
+import { waitUntil } from "@vercel/functions";
 import { JOB_EXPIRY_DAYS } from "../lib/config.js";
 import { purgeExpiredJobs } from "../lib/job-expiry.js";
 import { scrapeDueBatch } from "../lib/scrape-due.js";
+import {
+  runScrapeDelayHop,
+  scheduleNextScrapeBatch,
+  SCRAPE_BATCH_GAP_MS,
+} from "../lib/scrape-chain.js";
 
 const cron = new Hono();
 
@@ -42,6 +48,15 @@ async function handleScrape(c: Context) {
     }
   }
 
+  const auth = c.req.header("Authorization") ?? "";
+  const shouldContinue = !once && batch.remaining > 0 && auth.startsWith("Bearer ");
+  if (shouldContinue) {
+    console.log(
+      `[cron] scrape: remaining=${batch.remaining}; next batch of 5 in ${SCRAPE_BATCH_GAP_MS / 60000}m`,
+    );
+    scheduleNextScrapeBatch({ authorization: auth });
+  }
+
   if (batch.results.length === 0) {
     return c.json({
       ok: true,
@@ -64,8 +79,26 @@ async function handleScrape(c: Context) {
     remaining: batch.remaining,
     exhaustedBudget: batch.exhaustedBudget,
     pending: batch.pending,
+    nextBatchInMs: shouldContinue ? SCRAPE_BATCH_GAP_MS : 0,
     results: batch.results,
   });
+}
+
+async function handleScrapeDelay(c: Context) {
+  const auth = c.req.header("Authorization") ?? "";
+  if (!auth.startsWith("Bearer ")) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  const body = await c.req.json().catch(() => ({})) as { delayMs?: number };
+  const delayMs = Number(body.delayMs ?? SCRAPE_BATCH_GAP_MS);
+  waitUntil(
+    runScrapeDelayHop({ delayMs, authorization: auth }).catch((err) => {
+      console.error(
+        `[cron] scrape-delay hop failed: ${err instanceof Error ? err.message : err}`,
+      );
+    }),
+  );
+  return c.json({ ok: true, scheduled: true, delayMs }, 202);
 }
 
 async function handleExpireJobs(c: Context) {
@@ -81,6 +114,7 @@ async function handleExpireJobs(c: Context) {
 
 cron.get("/scrape", handleScrape);
 cron.post("/scrape", handleScrape);
+cron.post("/scrape-delay", handleScrapeDelay);
 cron.get("/expire-jobs", handleExpireJobs);
 cron.post("/expire-jobs", handleExpireJobs);
 
