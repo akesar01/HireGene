@@ -318,7 +318,7 @@ export async function waitAndIngest(
     jobsSkipped,
     startedAt: new Date(),
     finishedAt: new Date(),
-    errorMsg: posts.length === 0 ? "empty dataset (no post rows)" : skipSummary || null,
+    errorMsg: posts.length === 0 ? "empty dataset (no post rows)" : skipSummary || undefined,
   });
   await prisma.recruiter.update({
     where: { id: recruiter.id },
