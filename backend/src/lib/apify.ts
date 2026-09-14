@@ -12,7 +12,7 @@ import { isOpenApifyStatus, parseApifyDataset } from "./apify-parse.js";
 export { isOpenApifyStatus, parseApifyDataset } from "./apify-parse.js";
 
 const ACTOR_ID = "atomus~linkedin-posts-scraper-pro";
-const MAX_POSTS = 5;
+const MAX_POSTS = 20;
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -61,6 +61,7 @@ export interface ApifyPost {
   content?: string;
   url?: string;
   post_url?: string;
+  share_url?: string;
   post_type?: string;
   type?: string;
   author?: ApifyAuthor;
@@ -89,6 +90,7 @@ export interface ScrapeDetail {
   postsFound: number;
   jobsCreated: number;
   jobsSkipped: number;
+  skipReasons?: string;
   pending?: boolean;
 }
 
@@ -124,6 +126,7 @@ export async function startApifyRun(recruiter: {
       body: JSON.stringify({
         profiles: [recruiter.linkedinUrl],
         maxPosts: MAX_POSTS,
+        postedLimit: "month",
         postedAfterDate: jobExpiryCutoff().toISOString().split("T")[0],
         sortBy: "date",
         includeSharedPosts: true,
@@ -303,7 +306,8 @@ export async function waitAndIngest(
   }
 
   const posts = parseApifyDataset(await datasetRes.json());
-  const { jobsCreated, jobsSkipped } = await ingestPosts(recruiter, posts);
+  const { jobsCreated, jobsSkipped, skipReasons } = await ingestPosts(recruiter, posts);
+  const skipSummary = summarizeSkipReasons(skipReasons);
 
   await upsertRunLog({
     recruiterId: recruiter.id,
@@ -314,6 +318,7 @@ export async function waitAndIngest(
     jobsSkipped,
     startedAt: new Date(),
     finishedAt: new Date(),
+    errorMsg: posts.length === 0 ? "empty dataset (no post rows)" : skipSummary || null,
   });
   await prisma.recruiter.update({
     where: { id: recruiter.id },
@@ -331,23 +336,40 @@ export async function waitAndIngest(
       postsFound: posts.length,
       jobsCreated,
       jobsSkipped,
+      skipReasons: skipSummary || undefined,
     }],
   };
+}
+
+type SkipReason = "no_url" | "not_job" | "expired" | "duplicate";
+
+function summarizeSkipReasons(reasons: Record<string, number>): string {
+  return Object.entries(reasons)
+    .filter(([, count]) => count > 0)
+    .map(([reason, count]) => `${reason}=${count}`)
+    .join(",");
 }
 
 async function ingestPosts(
   recruiter: { id: number; name: string },
   posts: ApifyPost[],
-): Promise<{ jobsCreated: number; jobsSkipped: number }> {
+): Promise<{ jobsCreated: number; jobsSkipped: number; skipReasons: Record<SkipReason, number> }> {
   let jobsCreated = 0;
   let jobsSkipped = 0;
+  const skipReasons: Record<SkipReason, number> = {
+    no_url: 0,
+    not_job: 0,
+    expired: 0,
+    duplicate: 0,
+  };
 
   for (const post of posts) {
     const rawText = post.text ?? post.content ?? "";
-    const sourceUrl = post.url ?? post.post_url ?? "";
+    const sourceUrl = post.url ?? post.post_url ?? post.share_url ?? "";
 
     if (!sourceUrl) {
       jobsSkipped++;
+      skipReasons.no_url++;
       continue;
     }
 
@@ -356,6 +378,7 @@ async function ingestPosts(
 
     if (!classification.isJobPost) {
       jobsSkipped++;
+      skipReasons.not_job++;
       continue;
     }
 
@@ -371,6 +394,7 @@ async function ingestPosts(
         : new Date();
     if (isJobExpired(postedDate)) {
       jobsSkipped++;
+      skipReasons.expired++;
       continue;
     }
 
@@ -386,6 +410,7 @@ async function ingestPosts(
     if (existing) {
       if (existing.contentHash === contentHash) {
         jobsSkipped++;
+        skipReasons.duplicate++;
         continue;
       }
       await prisma.job.update({
@@ -438,7 +463,7 @@ async function ingestPosts(
     jobsCreated++;
   }
 
-  return { jobsCreated, jobsSkipped };
+  return { jobsCreated, jobsSkipped, skipReasons };
 }
 
 async function resolveJobCompany(

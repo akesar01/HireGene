@@ -98,6 +98,7 @@ export interface ScrapeBatchItem {
   ok: boolean;
   jobsCreated: number;
   jobsSkipped: number;
+  skipReasons?: string;
   pending?: boolean;
   error: string | null;
 }
@@ -135,6 +136,7 @@ export async function scrapeDueBatch(options: {
       ok: detail.status === "SUCCEEDED" || detail.pending === true,
       jobsCreated: detail.jobsCreated,
       jobsSkipped: detail.jobsSkipped,
+      skipReasons: detail.skipReasons,
       pending: detail.pending,
       error: detail.status === "FAILED" ? `Run ${detail.apifyRunId} ${detail.status}` : null,
     });
@@ -213,6 +215,7 @@ function itemFromOutcome(outcome: DueScrapeResult): ScrapeBatchItem {
     ok: outcome.error === null,
     jobsCreated: outcome.result?.jobsCreated ?? 0,
     jobsSkipped: outcome.result?.jobsSkipped ?? 0,
+    skipReasons: outcome.result?.details?.[0]?.skipReasons,
     pending: outcome.result?.pending,
     error: outcome.error,
   };
@@ -227,6 +230,7 @@ function mergeIngested(
     if (existing) {
       existing.jobsCreated = detail.jobsCreated;
       existing.jobsSkipped = detail.jobsSkipped;
+      existing.skipReasons = detail.skipReasons;
       existing.pending = detail.pending;
       existing.ok = detail.status === "SUCCEEDED" || detail.pending === true;
       if (detail.status === "SUCCEEDED") existing.error = null;
@@ -238,6 +242,7 @@ function mergeIngested(
       ok: detail.status === "SUCCEEDED" || detail.pending === true,
       jobsCreated: detail.jobsCreated,
       jobsSkipped: detail.jobsSkipped,
+      skipReasons: detail.skipReasons,
       pending: detail.pending,
       error: null,
     });

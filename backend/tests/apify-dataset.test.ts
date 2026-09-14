@@ -31,6 +31,15 @@ describe("parseApifyDataset", () => {
     expect(parseApifyDataset(null)).toEqual([]);
     expect(parseApifyDataset({})).toEqual([]);
   });
+
+  it("drops empty lookup rows that are not posts", () => {
+    const posts = parseApifyDataset([
+      { type: "lookup", message: "no posts" },
+      { type: "post", post_url: "https://linkedin.com/posts/e", content: "we're hiring" },
+    ]);
+    expect(posts).toHaveLength(1);
+    expect(posts[0].post_url).toContain("/posts/e");
+  });
 });
 
 describe("isOpenApifyStatus", () => {

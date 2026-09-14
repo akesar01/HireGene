@@ -39,6 +39,7 @@ async function handleScrape(c: Context) {
       console.log(
         `[cron] scrape: recruiter ${item.recruiterId} (${item.name}) ` +
           `created=${item.jobsCreated} skipped=${item.jobsSkipped}` +
+          `${item.skipReasons ? ` ${item.skipReasons}` : ""}` +
           `${item.pending ? " pending=true" : ""}`,
       );
     } else {

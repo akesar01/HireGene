@@ -86,10 +86,12 @@ export async function classifyPost(
     }
 
     const parsed = JSON.parse(content) as LLMClassification;
+    const llmSaysJob = Boolean(parsed.isJobPost);
+    const regexSaysJob = regexIsJobPost(text);
 
     // Validate and sanitize
     return {
-      isJobPost: Boolean(parsed.isJobPost),
+      isJobPost: llmSaysJob || regexSaysJob,
       title: typeof parsed.title === "string" ? parsed.title : regexExtractTitle(text),
       roleFamily: sanitizeEnum(parsed.roleFamily, [
         "engineering", "ai_ml", "product", "design", "data", "growth",
