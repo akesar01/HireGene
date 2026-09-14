@@ -1,5 +1,6 @@
 import { SignUp } from "@clerk/nextjs";
 import Link from "next/link";
+import BrandLogo from "@/components/BrandLogo";
 
 export default function SignUpPage() {
   return (
@@ -7,7 +8,7 @@ export default function SignUpPage() {
       <div className="w-full max-w-[400px]">
         {/* Branding */}
         <Link href="/" className="flex items-center justify-center gap-2 mb-6">
-          <img src="/logo.svg" alt="SkipTheBoard" width={28} height={28} className="shrink-0" />
+          <BrandLogo size={28} />
           <span className="text-xl font-bold text-foreground tracking-tight">SkipTheBoard</span>
         </Link>
 

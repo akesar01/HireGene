@@ -120,8 +120,8 @@ export default function JobBoard({
           />
         ) : (
           <div className="space-y-4">
-            {results.map((job, i) => (
-              <JobCard key={job.id} job={job} rank={i + 1} />
+            {results.map((job) => (
+              <JobCard key={job.id} job={job} />
             ))}
           </div>
         )

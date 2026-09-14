@@ -1,6 +1,6 @@
 import { clerkMiddleware } from "@clerk/nextjs/server";
 
-export default clerkMiddleware(async (auth, request) => {
+export default clerkMiddleware(async (_auth, _request) => {
   // All routes are public — auth is optional.
   // Clerk session is still available via auth() in server components
   // and useAuth() in client components.

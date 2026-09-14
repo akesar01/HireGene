@@ -8,12 +8,11 @@ import ConnectNoteButton from "./ConnectNoteButton";
 
 interface JobCardProps {
   job: Job;
-  rank: number;
   matchScore?: number;
   matchReason?: string;
 }
 
-export default function JobCard({ job, rank, matchScore, matchReason }: JobCardProps) {
+export default function JobCard({ job, matchScore, matchReason }: JobCardProps) {
   return (
     <article className="bg-card-bg border border-card-border rounded-xl p-4 shadow-card hover:shadow-card-hover hover:border-muted-light/40 transition-all duration-200 ease-out">
       <div className="flex gap-4">
@@ -25,6 +24,8 @@ export default function JobCard({ job, rank, matchScore, matchReason }: JobCardP
           {/* Author header */}
           <div className="flex items-center gap-2.5">
             {job.authorAvatar ? (
+              // LinkedIn CDN avatars need native img + referrerPolicy.
+              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={job.authorAvatar}
                 alt={job.author}

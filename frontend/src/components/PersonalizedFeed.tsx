@@ -19,10 +19,10 @@ interface RefinedMatch {
   reason: string;
 }
 
-export default function PersonalizedFeed({ jobs, profile, initialScores }: PersonalizedFeedProps) {
+export default function PersonalizedFeed({ jobs, profile: _profile, initialScores }: PersonalizedFeedProps) {
   const { getToken } = useAuth();
   const [refinedScores, setRefinedScores] = useState<Map<string, RefinedMatch>>(new Map());
-  const [isLoading, setIsLoading] = useState(true);
+  const [, setIsLoading] = useState(true);
 
   useEffect(() => {
     const refineTopJobs = async () => {
@@ -95,14 +95,13 @@ export default function PersonalizedFeed({ jobs, profile, initialScores }: Perso
 
   return (
     <div className="space-y-4">
-      {jobs.map((job, i) => {
+      {jobs.map((job) => {
         const score = getScore(String(job.id));
         const reason = getReason(String(job.id));
         return (
           <JobCard
             key={job.id}
             job={job}
-            rank={i + 1}
             matchScore={score}
             matchReason={reason}
           />

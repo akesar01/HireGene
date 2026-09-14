@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { updateProfile, type ResumeProfile, type FilterSummary } from "@/lib/profile";
+import { updateProfile, type ResumeProfile } from "@/lib/profile";
 
 const ROLE_FAMILIES = [
   { value: "engineering", label: "Engineering" },

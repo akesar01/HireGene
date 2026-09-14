@@ -50,7 +50,7 @@ const PLANS = [
 ];
 
 export default function PricingPage() {
-  const { isLoaded, isSignedIn, getToken } = useAuth();
+  const { isSignedIn, getToken } = useAuth();
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 

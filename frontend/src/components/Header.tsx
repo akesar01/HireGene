@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Show, UserButton, SignInButton } from "@clerk/nextjs";
+import BrandLogo from "./BrandLogo";
 
 interface HeaderProps {
   liveJobsCount?: number;
@@ -13,7 +14,7 @@ export default function Header({ liveJobsCount, maxWidth = "max-w-7xl" }: Header
     <header className="border-b border-card-border bg-card-bg sticky top-0 z-10">
       <div className={`${maxWidth} mx-auto px-6 py-3 flex items-center justify-between`}>
         <Link href="/" className="flex items-center gap-2">
-          <img src="/logo.svg" alt="SkipTheBoard" width={24} height={24} className="shrink-0" />
+          <BrandLogo size={24} />
           <span className="text-lg font-bold text-foreground tracking-tight">SkipTheBoard</span>
           <span className="hidden sm:inline text-xs text-muted">— stalk the poster, not the board</span>
         </Link>

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { BACKEND_URL } from "@/lib/config";
+import BrandLogo from "@/components/BrandLogo";
 
 const ADMIN_SECRET_KEY = "skiptheboard_admin_secret";
 
@@ -184,7 +185,7 @@ export default function AdminDashboard() {
       <div className="flex min-h-screen items-center justify-center px-4">
         <div className="w-full max-w-sm">
           <Link href="/" className="inline-block mb-6 flex items-center gap-2">
-            <img src="/logo.svg" alt="SkipTheBoard" width={24} height={24} className="shrink-0" />
+            <BrandLogo size={24} />
             <span className="text-lg font-bold text-foreground tracking-tight">SkipTheBoard</span>
           </Link>
           <h1 className="text-xl font-bold text-foreground">Admin</h1>
@@ -218,7 +219,7 @@ export default function AdminDashboard() {
         <div className="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link href="/" className="flex items-center gap-2">
-              <img src="/logo.svg" alt="SkipTheBoard" width={24} height={24} className="shrink-0" />
+              <BrandLogo size={24} />
               <span className="text-lg font-bold text-foreground tracking-tight">
                 SkipTheBoard
               </span>

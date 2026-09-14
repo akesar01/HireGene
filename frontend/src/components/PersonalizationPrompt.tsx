@@ -7,7 +7,7 @@ interface PersonalizationPromptProps {
   hasProfile: boolean;
 }
 
-export default function PersonalizationPrompt({ hasProfile }: PersonalizationPromptProps) {
+export default function PersonalizationPrompt({ hasProfile: _hasProfile }: PersonalizationPromptProps) {
   return (
     <Show when="signed-out">
       <div className="bg-gradient-to-br from-accent to-[#ff8c42] rounded-xl p-5 text-white shadow-card">

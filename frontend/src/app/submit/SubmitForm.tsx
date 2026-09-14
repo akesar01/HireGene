@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { BACKEND_URL } from "@/lib/config";
+import BrandLogo from "@/components/BrandLogo";
 
 export default function SubmitForm() {
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
@@ -45,7 +46,7 @@ export default function SubmitForm() {
       <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6">
         <header className="mb-8">
           <Link href="/" className="inline-flex items-center gap-2">
-            <img src="/logo.svg" alt="SkipTheBoard" width={24} height={24} className="shrink-0" />
+            <BrandLogo size={24} />
             <span className="text-lg font-bold text-foreground tracking-tight">SkipTheBoard</span>
           </Link>
           <p className="mt-1 text-xs text-muted">

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import BrandLogo from "./BrandLogo";
 
 export default function Footer() {
   return (
@@ -6,7 +7,7 @@ export default function Footer() {
       <div className="max-w-7xl mx-auto px-6 py-6">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <img src="/logo.svg" alt="SkipTheBoard" width={20} height={20} className="shrink-0" />
+            <BrandLogo size={20} />
             <Link href="/" className="text-sm font-bold text-foreground tracking-tight">
               SkipTheBoard
             </Link>
