@@ -1,23 +1,19 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
-import { waitUntil } from "@vercel/functions";
 import { JOB_EXPIRY_DAYS } from "../lib/config.js";
 import { purgeExpiredJobs } from "../lib/job-expiry.js";
 import { scrapeDueBatch } from "../lib/scrape-due.js";
-import {
-  runScrapeDelayHop,
-  scheduleNextScrapeBatch,
-  SCRAPE_BATCH_GAP_MS,
-} from "../lib/scrape-chain.js";
 
 const cron = new Hono();
 
 cron.use("*", async (c, next) => {
   const auth = c.req.header("Authorization");
   const token = auth?.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";
-  const allowed = [process.env.CRON_SECRET, process.env.ADMIN_SECRET].filter(
-    (value): value is string => Boolean(value),
-  );
+  const allowed = [
+    process.env.CRON_SECRET,
+    process.env.ADMIN_SECRET,
+    process.env.SCRAPE_TICK_TOKEN,
+  ].filter((value): value is string => Boolean(value));
 
   if (!token || !allowed.includes(token)) {
     return c.json({ error: "Unauthorized" }, 401);
@@ -49,13 +45,10 @@ async function handleScrape(c: Context) {
     }
   }
 
-  const auth = c.req.header("Authorization") ?? "";
-  const shouldContinue = !once && batch.remaining > 0 && auth.startsWith("Bearer ");
-  if (shouldContinue) {
+  if (!once && batch.remaining > 0) {
     console.log(
-      `[cron] scrape: remaining=${batch.remaining}; next batch of 5 in ${SCRAPE_BATCH_GAP_MS / 60000}m`,
+      `[cron] scrape: remaining=${batch.remaining}; next 5 on the 10-minute tick`,
     );
-    scheduleNextScrapeBatch({ authorization: auth });
   }
 
   if (batch.results.length === 0) {
@@ -80,26 +73,8 @@ async function handleScrape(c: Context) {
     remaining: batch.remaining,
     exhaustedBudget: batch.exhaustedBudget,
     pending: batch.pending,
-    nextBatchInMs: shouldContinue ? SCRAPE_BATCH_GAP_MS : 0,
     results: batch.results,
   });
-}
-
-async function handleScrapeDelay(c: Context) {
-  const auth = c.req.header("Authorization") ?? "";
-  if (!auth.startsWith("Bearer ")) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
-  const body = await c.req.json().catch(() => ({})) as { delayMs?: number };
-  const delayMs = Number(body.delayMs ?? SCRAPE_BATCH_GAP_MS);
-  waitUntil(
-    runScrapeDelayHop({ delayMs, authorization: auth }).catch((err) => {
-      console.error(
-        `[cron] scrape-delay hop failed: ${err instanceof Error ? err.message : err}`,
-      );
-    }),
-  );
-  return c.json({ ok: true, scheduled: true, delayMs }, 202);
 }
 
 async function handleExpireJobs(c: Context) {
@@ -115,7 +90,6 @@ async function handleExpireJobs(c: Context) {
 
 cron.get("/scrape", handleScrape);
 cron.post("/scrape", handleScrape);
-cron.post("/scrape-delay", handleScrapeDelay);
 cron.get("/expire-jobs", handleExpireJobs);
 cron.post("/expire-jobs", handleExpireJobs);
 

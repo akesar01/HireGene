@@ -1,0 +1,27 @@
+name: Scrape tick
+
+on:
+  schedule:
+    # Fresh request every 10 minutes. Do not chain from the app:
+    # Vercel treats that self-call as an infinite loop and stops the list.
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  tick:
+    name: Scrape next 5 hiring managers
+    runs-on: ubuntu-latest
+    steps:
+      - name: Scrape due batch
+        env:
+          SCRAPE_TICK_TOKEN: ${{ secrets.SCRAPE_TICK_TOKEN }}
+        run: |
+          if [ -z "$SCRAPE_TICK_TOKEN" ]; then
+            echo "SCRAPE_TICK_TOKEN is not set" >&2
+            exit 1
+          fi
+          curl -fsS -X POST "https://backend-umber-nu-43.vercel.app/api/cron/scrape" \
+            -H "Authorization: Bearer ${SCRAPE_TICK_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -o /tmp/scrape.json
+          python3 -c 'import json; d=json.load(open("/tmp/scrape.json")); print("processed", d.get("processed"), "remaining", d.get("remaining"), "created", sum((r.get("jobsCreated") or 0) for r in d.get("results") or []))'

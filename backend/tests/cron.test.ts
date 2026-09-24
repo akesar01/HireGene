@@ -23,12 +23,7 @@ describe("POST /api/cron/scrape", () => {
   });
 });
 
-describe("POST /api/cron/scrape-delay", () => {
-  it("rejects missing auth", async () => {
-    const res = await app.request("/api/cron/scrape-delay", { method: "POST" });
-    expect(res.status).toBe(401);
-  });
-});
+
 
 describe("GET /api/cron/expire-jobs", () => {
   it("rejects missing auth", async () => {
