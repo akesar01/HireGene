@@ -1,5 +1,17 @@
 import { waitUntil } from "@vercel/functions";
 
+/** Only the daily production cron may start the GitHub drain. The drain's own token must not. */
+export function shouldStartScrapeDrain(options: {
+  callerToken: string;
+  cronSecret: string | undefined;
+  remaining: number;
+  once: boolean;
+}): boolean {
+  if (options.once || options.remaining <= 0) return false;
+  if (!options.cronSecret) return false;
+  return options.callerToken === options.cronSecret;
+}
+
 /** Pause between Apify batches of 5 so Free-plan concurrency stays at 5. */
 export const SCRAPE_BATCH_GAP_MS = 10 * 60 * 1000;
 

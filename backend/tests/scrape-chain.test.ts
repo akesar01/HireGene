@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   nextDelayHop,
   scrapeSelfUrl,
+  shouldStartScrapeDrain,
   SCRAPE_BATCH_GAP_MS,
   SCRAPE_DELAY_HOP_MS,
 } from "../src/lib/scrape-chain";
@@ -23,6 +24,29 @@ describe("nextDelayHop", () => {
 
   it("does not sleep longer than the hop cap", () => {
     expect(nextDelayHop(1_000_000, 1000)).toEqual({ sleepMs: 1000, leftoverMs: 999_000 });
+  });
+});
+
+describe("shouldStartScrapeDrain", () => {
+  it("starts the drain only for the daily cron when people are still due", () => {
+    expect(shouldStartScrapeDrain({
+      callerToken: "cron",
+      cronSecret: "cron",
+      remaining: 12,
+      once: false,
+    })).toBe(true);
+    expect(shouldStartScrapeDrain({
+      callerToken: "tick",
+      cronSecret: "cron",
+      remaining: 12,
+      once: false,
+    })).toBe(false);
+    expect(shouldStartScrapeDrain({
+      callerToken: "cron",
+      cronSecret: "cron",
+      remaining: 0,
+      once: false,
+    })).toBe(false);
   });
 });
 

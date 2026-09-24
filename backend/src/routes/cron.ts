@@ -3,6 +3,7 @@ import type { Context } from "hono";
 import { JOB_EXPIRY_DAYS } from "../lib/config.js";
 import { purgeExpiredJobs } from "../lib/job-expiry.js";
 import { scrapeDueBatch } from "../lib/scrape-due.js";
+import { shouldStartScrapeDrain } from "../lib/scrape-chain.js";
 
 const cron = new Hono();
 
@@ -45,10 +46,18 @@ async function handleScrape(c: Context) {
     }
   }
 
-  if (!once && batch.remaining > 0) {
-    console.log(
-      `[cron] scrape: remaining=${batch.remaining}; next 5 on the 10-minute tick`,
-    );
+  const callerToken = c.req.header("Authorization")?.startsWith("Bearer ")
+    ? c.req.header("Authorization")!.slice("Bearer ".length)
+    : "";
+  if (shouldStartScrapeDrain({
+    callerToken,
+    cronSecret: process.env.CRON_SECRET,
+    remaining: batch.remaining,
+    once,
+  })) {
+    await dispatchScrapeDrain();
+  } else if (!once && batch.remaining > 0) {
+    console.log(`[cron] scrape: remaining=${batch.remaining}`);
   }
 
   if (batch.results.length === 0) {
@@ -75,6 +84,34 @@ async function handleScrape(c: Context) {
     pending: batch.pending,
     results: batch.results,
   });
+}
+
+async function dispatchScrapeDrain(): Promise<void> {
+  const githubToken = process.env.GITHUB_DISPATCH_TOKEN;
+  if (!githubToken) {
+    console.error("[cron] GITHUB_DISPATCH_TOKEN is not set; scrape drain not started");
+    return;
+  }
+  const res = await fetch(
+    "https://api.github.com/repos/akesar01/HireGene/actions/workflows/scrape-tick.yml/dispatches",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${githubToken}`,
+        Accept: "application/vnd.github+json",
+        "Content-Type": "application/json",
+        "User-Agent": "hiregene-scrape",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+      body: JSON.stringify({ ref: "main" }),
+    },
+  );
+  if (res.status === 204) {
+    console.log("[cron] started GitHub scrape drain");
+    return;
+  }
+  const body = await res.text();
+  console.error(`[cron] GitHub scrape drain failed: ${res.status} ${body.slice(0, 180)}`);
 }
 
 async function handleExpireJobs(c: Context) {

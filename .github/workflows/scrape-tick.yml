@@ -1,10 +1,10 @@
 name: Scrape tick
 
 on:
+  # GitHub's frequent schedule never started this workflow. The daily
+  # production scrape starts it. This once-a-day entry is only a backup.
   schedule:
-    # GitHub drops */10 jobs that land on :00 and :10. These minutes stay
-    # 10 apart and off that pile-up. One run then drains every due manager.
-    - cron: "7,17,27,37,47,57 * * * *"
+    - cron: "17 4 * * *"
   workflow_dispatch:
 
 concurrency:
