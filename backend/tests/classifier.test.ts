@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   isJobPost,
+  extractExplicitTitle,
   extractTitle,
   extractRoleFamily,
   extractSeniority,
@@ -122,9 +123,61 @@ describe("extractTechStack", () => {
   });
 });
 
+describe("extractExplicitTitle", () => {
+  it("stops the capture before connective clauses and punctuation", () => {
+    expect(extractExplicitTitle("We're hiring a Senior Backend Engineer to join our team")).toBe("Senior Backend Engineer");
+    expect(extractExplicitTitle("We're hiring a Senior Backend Engineer\nCome build with us.")).toBe("Senior Backend Engineer");
+    expect(extractExplicitTitle("Hiring Software Engineer III for our Bengaluru office. DM me.")).toBe("Software Engineer III");
+    expect(extractExplicitTitle("We're hiring for a Data Scientist, apply now!")).toBe("Data Scientist");
+    expect(extractExplicitTitle("Looking for an ML Engineer (Bengaluru) with LLM experience")).toBe("ML Engineer");
+  });
+
+  it("reads the role out of a 'Hiring | Role | Company' header", () => {
+    expect(extractExplicitTitle("We're Hiring | SDET III – Performance Testing | Baazi Games")).toBe(
+      "SDET III – Performance Testing",
+    );
+    expect(extractExplicitTitle("Hiring: Senior Backend Engineer at Zepto")).toBe("Senior Backend Engineer");
+  });
+
+  it("accepts the wider role vocabulary", () => {
+    expect(extractExplicitTitle("We're hiring an SRE to run our platform")).toBe("SRE");
+    expect(extractExplicitTitle("We're hiring a Head of Engineering for Bengaluru")).toBe("Head of Engineering");
+    expect(extractExplicitTitle("Looking for a Director of Engineering, Payments")).toBe("Director of Engineering");
+    expect(extractExplicitTitle("Hiring Embedded Programmers for our Pune lab")).toBe("Embedded Programmers");
+  });
+
+  it("moves past a cue that yields no title to a later one that does", () => {
+    expect(
+      extractExplicitTitle("I'm the hiring manager for this role. We're looking for a Senior Backend Engineer to join us."),
+    ).toBe("Senior Backend Engineer");
+    expect(extractExplicitTitle("We're hiring - we are looking for a Backend Engineer at Zepto")).toBe("Backend Engineer");
+  });
+
+  it("does not treat 'hiring manager' as the role being hired", () => {
+    expect(extractExplicitTitle("Hiring Manager: Priya. Looking for a Backend Engineer, DM me")).toBe("Backend Engineer");
+    expect(extractExplicitTitle("Hiring Managers: please share your openings below.")).toBe("");
+  });
+
+  it("returns nothing for hiring sentences that never name a role", () => {
+    expect(extractExplicitTitle("We're hiring for our Bengaluru office, all levels welcome. DM me.")).toBe("");
+    expect(extractExplicitTitle("Currently hiring across multiple teams, ping me")).toBe("");
+    expect(extractExplicitTitle("We're hiring! Join us at Zepto.")).toBe("");
+    expect(extractExplicitTitle("My team is hiring. Need someone with Python skills.")).toBe("");
+  });
+
+  it("returns nothing when the only role word is a lone lowercase noun", () => {
+    expect(
+      extractExplicitTitle(
+        "Every startup is hiring engineers with 10 years of React experience. React is only 12 years old. Know someone who feels this?",
+      ),
+    ).toBe("");
+    expect(extractExplicitTitle("We are hiring developers, apply now")).toBe("");
+  });
+});
+
 describe("extractTitle", () => {
   it("extracts title from 'hiring X' pattern", () => {
-    expect(extractTitle("We're hiring a Senior Backend Engineer to join our team")).toBe("Senior Backend Engineer to join our team");
+    expect(extractTitle("We're hiring a Senior Backend Engineer to join our team")).toBe("Senior Backend Engineer");
   });
 
   it("falls back to role family + seniority", () => {

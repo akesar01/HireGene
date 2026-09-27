@@ -71,6 +71,7 @@ npm run dev
 - `APIFY_MAX_CONCURRENT` — Max simultaneous Apify runs (default 5, Apify free-plan cap)
 - `GROQ_API_KEY` — Groq API key for AI-powered post enrichment
 - `GROQ_MODEL` — Optional Groq model override (default `openai/gpt-oss-120b`)
+- `INGEST_ROLE_FAMILIES` — Role families allowed into the feed, comma-separated (default `engineering,ai_ml`); see the ingest quality gates in [DEPLOYMENT.md](./DEPLOYMENT.md)
 - `CORS_ORIGIN` — Allowed frontend origin(s), comma-separated
 
 ## API Endpoints
