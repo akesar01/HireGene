@@ -148,20 +148,27 @@ const ROLE_NOUN =
 const TITLE_CLAUSE_TAIL = /(?:^|\s+)(?:for|to|in|at|across|who|with)\b[\s\S]*$/i;
 /** At least one capitalized word or at least two words. */
 const TITLE_SHAPE = /\p{Lu}|\S\s+\S/u;
+const TITLE_CUE = /hiring|looking for/gi;
+const TITLE_AFTER_CUE = /^(?:hiring|looking for)(?:\s*[|:\-–—]\s*|\s+)(?:for\s+)?(?:an?\s+)?([^\n.,!?;:(|]{1,60})/i;
+/** "hiring manager" names the author's role, not an opening. */
+const HIRING_MANAGER = /^hiring\s+managers?\b/i;
 
 /**
  * Title named explicitly in the post ("hiring a X", "looking for X",
- * "Hiring | X | Company"). The capture stops at clause punctuation, pipes,
- * and connective words, and must name a role noun in title shape.
- * Returns "" otherwise; no synthetic fallback.
+ * "Hiring | X | Company"). Every cue is tried in order; the capture stops at
+ * clause punctuation, pipes, and connective words, and must name a role noun
+ * in title shape. Returns "" otherwise; no synthetic fallback.
  */
 export function extractExplicitTitle(text: string): string {
-  const hiringMatch = text.match(
-    /(?:hiring|looking for)(?:\s*[|:\-–—]\s*|\s+)(?:for\s+)?(?:an?\s+)?([^\n.,!?;:(|]{1,60})/i,
-  );
-  if (!hiringMatch) return "";
-  const title = hiringMatch[1].replace(TITLE_CLAUSE_TAIL, "").trim();
-  return ROLE_NOUN.test(title) && TITLE_SHAPE.test(title) ? title : "";
+  for (const cue of text.matchAll(TITLE_CUE)) {
+    const rest = text.slice(cue.index ?? 0);
+    if (HIRING_MANAGER.test(rest)) continue;
+    const match = rest.match(TITLE_AFTER_CUE);
+    if (!match) continue;
+    const title = match[1].replace(TITLE_CLAUSE_TAIL, "").trim();
+    if (ROLE_NOUN.test(title) && TITLE_SHAPE.test(title)) return title;
+  }
+  return "";
 }
 
 export function extractTitle(text: string): string {

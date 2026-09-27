@@ -101,6 +101,12 @@ describe("isWellFormedTitle", () => {
     expect(isWellFormedTitle("Location: Hyderabad")).toBe(false);
   });
 
+  it("rejects dash-separated location lines", () => {
+    expect(isWellFormedTitle("Bengaluru - Hybrid")).toBe(false);
+    expect(isWellFormedTitle("Location: Remote – India")).toBe(false);
+    expect(isWellFormedTitle("Pune — On-site")).toBe(false);
+  });
+
   it("accepts real titles including ones with dashes and parentheses", () => {
     expect(isWellFormedTitle(".NET Developer")).toBe(true);
     expect(isWellFormedTitle("(Senior) Backend Engineer")).toBe(true);
@@ -182,6 +188,20 @@ describe("evaluateJobGates on the 2026-09-26 production rows", () => {
       ENV,
     );
     expect(result).toMatchObject({ ok: true, title: "Senior Backend Engineer", company: "Razorpay" });
+  });
+
+  it("rejects a dash-separated location line as unparseable", () => {
+    const result = evaluateJobGates(
+      {
+        title: "Bengaluru - Hybrid",
+        company: "Swiggy",
+        roleFamily: "engineering",
+        authorTitle: "Campus Programs | Swiggy",
+        rawText: "Location: Bengaluru - Hybrid. Reach out for details.",
+      },
+      ENV,
+    );
+    expect(result).toMatchObject({ ok: false, reason: "unparseable" });
   });
 
   it("keeps a .NET title the classifier returned", () => {

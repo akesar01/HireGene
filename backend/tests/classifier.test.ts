@@ -146,6 +146,18 @@ describe("extractExplicitTitle", () => {
     expect(extractExplicitTitle("Hiring Embedded Programmers for our Pune lab")).toBe("Embedded Programmers");
   });
 
+  it("moves past a cue that yields no title to a later one that does", () => {
+    expect(
+      extractExplicitTitle("I'm the hiring manager for this role. We're looking for a Senior Backend Engineer to join us."),
+    ).toBe("Senior Backend Engineer");
+    expect(extractExplicitTitle("We're hiring - we are looking for a Backend Engineer at Zepto")).toBe("Backend Engineer");
+  });
+
+  it("does not treat 'hiring manager' as the role being hired", () => {
+    expect(extractExplicitTitle("Hiring Manager: Priya. Looking for a Backend Engineer, DM me")).toBe("Backend Engineer");
+    expect(extractExplicitTitle("Hiring Managers: please share your openings below.")).toBe("");
+  });
+
   it("returns nothing for hiring sentences that never name a role", () => {
     expect(extractExplicitTitle("We're hiring for our Bengaluru office, all levels welcome. DM me.")).toBe("");
     expect(extractExplicitTitle("Currently hiring across multiple teams, ping me")).toBe("");

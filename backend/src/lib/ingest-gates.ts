@@ -87,7 +87,7 @@ function isLocationLine(title: string): boolean {
   const segments = title
     .toLowerCase()
     .replace(/^location\s*:/, "")
-    .split(/[|,/;:()]+/)
+    .split(/[|,/;:()]+|\s+[-–—]\s+/)
     .map((segment) => segment.trim())
     .filter(Boolean);
   return segments.length > 0 && segments.every((segment) => LOCATION_LINE_WORDS.has(segment));

@@ -118,6 +118,23 @@ describe("classifyPost with Groq mocked", () => {
     expect(result.title).toBe("");
   });
 
+  it("skips the author's 'hiring manager' phrase and recovers the real role when the model leaves the title blank", async () => {
+    groqChatContent.mockResolvedValue(
+      JSON.stringify({
+        isJobPost: true,
+        title: "",
+        roleFamily: "engineering",
+        seniority: "mid",
+        remoteMode: "in_office",
+        techStack: [],
+        description: [],
+      }),
+    );
+    const result = await classifyPost("Hiring Manager: Priya. Looking for a Backend Engineer, DM me", "EM @ Zepto");
+    expect(result.isJobPost).toBe(true);
+    expect(result.title).toBe("Backend Engineer");
+  });
+
   it("recovers the role from a 'Hiring | Role | Company' header when the model leaves the title blank", async () => {
     groqChatContent.mockResolvedValue(
       JSON.stringify({
