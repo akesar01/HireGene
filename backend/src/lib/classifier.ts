@@ -143,19 +143,25 @@ export function extractTechStack(text: string): string[] {
   return stacks;
 }
 
-const ROLE_NOUN = /\b(?:engineer|developer|scientist|architect|sde|manager|analyst|designer|lead|intern)s?\b/i;
+const ROLE_NOUN =
+  /\b(?:engineer|developer|scientist|architect|sdet?|sre|programmer|manager|analyst|designer|lead|intern)s?\b|\b(?:head|director)\s+of\s+engineering\b/i;
 const TITLE_CLAUSE_TAIL = /(?:^|\s+)(?:for|to|in|at|across|who|with)\b[\s\S]*$/i;
+/** At least one capitalized word or at least two words. */
+const TITLE_SHAPE = /\p{Lu}|\S\s+\S/u;
 
 /**
- * Title named explicitly in the post ("hiring a X", "looking for X").
- * The capture stops at clause punctuation and connective words, and must
- * name a role noun. Returns "" otherwise; no synthetic fallback.
+ * Title named explicitly in the post ("hiring a X", "looking for X",
+ * "Hiring | X | Company"). The capture stops at clause punctuation, pipes,
+ * and connective words, and must name a role noun in title shape.
+ * Returns "" otherwise; no synthetic fallback.
  */
 export function extractExplicitTitle(text: string): string {
-  const hiringMatch = text.match(/(?:hiring|looking for)\s+(?:for\s+)?(?:an?\s+)?([^\n.,!?;:(]{1,60})/i);
+  const hiringMatch = text.match(
+    /(?:hiring|looking for)(?:\s*[|:\-–—]\s*|\s+)(?:for\s+)?(?:an?\s+)?([^\n.,!?;:(|]{1,60})/i,
+  );
   if (!hiringMatch) return "";
   const title = hiringMatch[1].replace(TITLE_CLAUSE_TAIL, "").trim();
-  return ROLE_NOUN.test(title) ? title : "";
+  return ROLE_NOUN.test(title) && TITLE_SHAPE.test(title) ? title : "";
 }
 
 export function extractTitle(text: string): string {

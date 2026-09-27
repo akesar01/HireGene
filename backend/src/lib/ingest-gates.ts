@@ -99,7 +99,7 @@ export function isWellFormedTitle(title: string): boolean {
   if (!value) return false;
   const letters = (value.match(/\p{L}/gu) ?? []).length;
   if (letters < 3) return false;
-  if (/^[^\p{L}\p{N}]/u.test(value)) return false;
+  if (/^[|\-–—•:;,/]/.test(value)) return false;
   const nonSpace = value.replace(/\s+/g, "").length;
   if (letters / nonSpace < 0.6) return false;
   if ((value.match(/\|/g) ?? []).length >= 2) return false;

@@ -102,6 +102,8 @@ describe("isWellFormedTitle", () => {
   });
 
   it("accepts real titles including ones with dashes and parentheses", () => {
+    expect(isWellFormedTitle(".NET Developer")).toBe(true);
+    expect(isWellFormedTitle("(Senior) Backend Engineer")).toBe(true);
     expect(isWellFormedTitle("Staff Software Engineer (Backend)")).toBe(true);
     expect(isWellFormedTitle("SDE III – Backend")).toBe(true);
     expect(isWellFormedTitle("Physical Design Engineer")).toBe(true);
@@ -180,6 +182,34 @@ describe("evaluateJobGates on the 2026-09-26 production rows", () => {
       ENV,
     );
     expect(result).toMatchObject({ ok: true, title: "Senior Backend Engineer", company: "Razorpay" });
+  });
+
+  it("keeps a .NET title the classifier returned", () => {
+    const result = evaluateJobGates(
+      {
+        title: ".NET Developer",
+        company: "Unknown",
+        roleFamily: "engineering",
+        authorTitle: "Hiring Manager @ Zeta",
+        rawText: "We're hiring a .NET Developer for Pune",
+      },
+      ENV,
+    );
+    expect(result).toMatchObject({ ok: true, title: ".NET Developer" });
+  });
+
+  it("recovers the role from a 'Hiring | Role | Company' header when the title is blank", () => {
+    const result = evaluateJobGates(
+      {
+        title: "",
+        company: "Baazi Games",
+        roleFamily: "engineering",
+        authorTitle: "Talent Acquisition | Baazi Games",
+        rawText: "We're Hiring | SDET III – Performance Testing | Baazi Games",
+      },
+      ENV,
+    );
+    expect(result).toEqual({ ok: true, title: "SDET III – Performance Testing", company: "Baazi Games" });
   });
 
   it("does not promote a hiring sentence fragment into the title", () => {

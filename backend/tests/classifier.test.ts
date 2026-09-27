@@ -132,11 +132,34 @@ describe("extractExplicitTitle", () => {
     expect(extractExplicitTitle("Looking for an ML Engineer (Bengaluru) with LLM experience")).toBe("ML Engineer");
   });
 
+  it("reads the role out of a 'Hiring | Role | Company' header", () => {
+    expect(extractExplicitTitle("We're Hiring | SDET III – Performance Testing | Baazi Games")).toBe(
+      "SDET III – Performance Testing",
+    );
+    expect(extractExplicitTitle("Hiring: Senior Backend Engineer at Zepto")).toBe("Senior Backend Engineer");
+  });
+
+  it("accepts the wider role vocabulary", () => {
+    expect(extractExplicitTitle("We're hiring an SRE to run our platform")).toBe("SRE");
+    expect(extractExplicitTitle("We're hiring a Head of Engineering for Bengaluru")).toBe("Head of Engineering");
+    expect(extractExplicitTitle("Looking for a Director of Engineering, Payments")).toBe("Director of Engineering");
+    expect(extractExplicitTitle("Hiring Embedded Programmers for our Pune lab")).toBe("Embedded Programmers");
+  });
+
   it("returns nothing for hiring sentences that never name a role", () => {
     expect(extractExplicitTitle("We're hiring for our Bengaluru office, all levels welcome. DM me.")).toBe("");
     expect(extractExplicitTitle("Currently hiring across multiple teams, ping me")).toBe("");
     expect(extractExplicitTitle("We're hiring! Join us at Zepto.")).toBe("");
     expect(extractExplicitTitle("My team is hiring. Need someone with Python skills.")).toBe("");
+  });
+
+  it("returns nothing when the only role word is a lone lowercase noun", () => {
+    expect(
+      extractExplicitTitle(
+        "Every startup is hiring engineers with 10 years of React experience. React is only 12 years old. Know someone who feels this?",
+      ),
+    ).toBe("");
+    expect(extractExplicitTitle("We are hiring developers, apply now")).toBe("");
   });
 });
 

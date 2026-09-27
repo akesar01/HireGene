@@ -98,6 +98,46 @@ describe("classifyPost with Groq mocked", () => {
     expect(withTitle.title).toBe("Senior Backend Engineer");
   });
 
+  it("does not let commentary with a lone lowercase role noun override a model 'not a job'", async () => {
+    groqChatContent.mockResolvedValue(
+      JSON.stringify({
+        isJobPost: false,
+        title: "",
+        roleFamily: "engineering",
+        seniority: "mid",
+        remoteMode: "in_office",
+        techStack: [],
+        description: [],
+      }),
+    );
+    const result = await classifyPost(
+      "Every startup is hiring engineers with 10 years of React experience. React is only 12 years old. Know someone who feels this?",
+      "Founder @ Startup",
+    );
+    expect(result.isJobPost).toBe(false);
+    expect(result.title).toBe("");
+  });
+
+  it("recovers the role from a 'Hiring | Role | Company' header when the model leaves the title blank", async () => {
+    groqChatContent.mockResolvedValue(
+      JSON.stringify({
+        isJobPost: true,
+        title: "",
+        roleFamily: "engineering",
+        seniority: "mid",
+        remoteMode: "in_office",
+        techStack: [],
+        description: [],
+      }),
+    );
+    const result = await classifyPost(
+      "We're Hiring | SDET III – Performance Testing | Baazi Games",
+      "Talent Acquisition | Baazi Games",
+    );
+    expect(result.isJobPost).toBe(true);
+    expect(result.title).toBe("SDET III – Performance Testing");
+  });
+
   it("does not recover a sentence fragment as the title when the model leaves it blank", async () => {
     const blankTitle = JSON.stringify({
       isJobPost: true,
@@ -148,6 +188,7 @@ describe("classifyPost regex fallback without a Groq key", () => {
     for (const text of [
       "We're hiring for our Bengaluru office, all levels welcome. DM me.",
       "Currently hiring across multiple teams, ping me",
+      "Every startup is hiring engineers with 10 years of React experience. React is only 12 years old. Know someone who feels this?",
     ]) {
       const result = await classifyPost(text);
       expect(result.isJobPost).toBe(false);
