@@ -1,7 +1,7 @@
 // Apply the deterministic ingest gates to every existing Job row.
 //
 //   npx tsx scripts/reclassify-jobs.ts                 # dry run: print keep/delete per job
-//   npx tsx scripts/reclassify-jobs.ts --apply         # delete failing rows, fix companies
+//   npx tsx scripts/reclassify-jobs.ts --apply         # delete failing rows, fix titles and companies
 //   INGEST_ROLE_FAMILIES=engineering,data npx tsx scripts/reclassify-jobs.ts
 //
 // Uses only stored fields (title, company, roleFamily, authorTitle, rawText,

@@ -173,7 +173,7 @@ Companies that look like sentence fragments or cities are replaced by the compan
 ```bash
 cd backend
 npx tsx scripts/reclassify-jobs.ts            # dry run
-npx tsx scripts/reclassify-jobs.ts --apply    # delete failing rows (plus their votes and applications) and repair companies
+npx tsx scripts/reclassify-jobs.ts --apply    # delete failing rows (plus their votes and applications) and repair titles and companies
 ```
 
 `INGEST_ROLE_FAMILIES` is honoured here too. Run the dry run first and read the list before applying.
