@@ -10,6 +10,7 @@ import {
   LOCATION_WORDS,
 } from "./extract-company.js";
 import { MS_PER_DAY } from "./job-expiry.js";
+import { VALID_ROLE_FAMILIES } from "./llm-classifier.js";
 
 export type IngestSkipReason =
   | "no_url"
@@ -28,22 +29,29 @@ export const SKIP_REASONS: IngestSkipReason[] = [
   "duplicate",
 ];
 
-/** Must match Prisma RoleFamily enum. */
-const ROLE_FAMILIES = new Set([
-  "engineering", "ai_ml", "product", "design", "data", "growth",
-  "marketing", "content", "ops", "founders_office", "sales",
-  "strategy", "finance", "business", "people",
-]);
+const ROLE_FAMILIES = new Set<string>(VALID_ROLE_FAMILIES);
 
 export const DEFAULT_ROLE_FAMILIES = ["engineering", "ai_ml"] as const;
 
+const warnedRoleFamilyValues = new Set<string>();
+
 /** Role families allowed into the feed; `INGEST_ROLE_FAMILIES` overrides. */
 export function allowedRoleFamilies(env: NodeJS.ProcessEnv = process.env): Set<string> {
-  const configured = (env.INGEST_ROLE_FAMILIES ?? "")
+  const raw = env.INGEST_ROLE_FAMILIES ?? "";
+  const entries = raw
     .split(",")
     .map((value) => value.trim().toLowerCase())
-    .filter((value) => ROLE_FAMILIES.has(value));
-  return new Set(configured.length > 0 ? configured : DEFAULT_ROLE_FAMILIES);
+    .filter(Boolean);
+  const configured = entries.filter((value) => ROLE_FAMILIES.has(value));
+  const dropped = entries.filter((value) => !ROLE_FAMILIES.has(value));
+  const allowed = new Set(configured.length > 0 ? configured : DEFAULT_ROLE_FAMILIES);
+  if (dropped.length > 0 && !warnedRoleFamilyValues.has(raw)) {
+    warnedRoleFamilyValues.add(raw);
+    console.warn(
+      `[ingest] INGEST_ROLE_FAMILIES ignored unknown ${dropped.join(",")}; using ${[...allowed].join(",")}`,
+    );
+  }
+  return allowed;
 }
 
 /**
@@ -52,11 +60,10 @@ export function allowedRoleFamilies(env: NodeJS.ProcessEnv = process.env): Set<s
  */
 const OFF_TARGET_TITLE_PATTERNS = [
   /\bsales\s+engineer/i,
-  /\bsolutions?\s+(?:engineer|architect|consultant)/i,
+  /\bsolutions?\s+(?:engineer|consultant)/i,
   /\bpre-?\s?sales\b/i,
   /\bcustomer\s+success\b/i,
   /\bsupport\s+engineer/i,
-  /\b(?:technical|customer|product|it)\s+support\b/i,
   /\brecruit(?:er|ing|ment)\b/i,
   /\btalent\b/i,
 ];

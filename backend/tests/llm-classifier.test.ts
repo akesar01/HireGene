@@ -95,16 +95,36 @@ describe("classifyPost with Groq mocked", () => {
 
     const withTitle = await classifyPost("We're hiring a Senior Backend Engineer to join our team", "");
     expect(withTitle.isJobPost).toBe(true);
-    expect(withTitle.title).toBe("Senior Backend Engineer to join our team");
+    expect(withTitle.title).toBe("Senior Backend Engineer");
   });
 
-  it("tells the model to return isJobPost false when it cannot name a title", async () => {
+  it("does not recover a sentence fragment as the title when the model leaves it blank", async () => {
+    const blankTitle = JSON.stringify({
+      isJobPost: true,
+      title: "",
+      roleFamily: "engineering",
+      seniority: "mid",
+      remoteMode: "in_office",
+      techStack: [],
+      description: [],
+    });
+    for (const text of [
+      "We're hiring for our Bengaluru office, all levels welcome. DM me.",
+      "Currently hiring across multiple teams, ping me",
+    ]) {
+      groqChatContent.mockResolvedValue(blankTitle);
+      const result = await classifyPost(text, "Talent Partner");
+      expect(result.isJobPost).toBe(false);
+      expect(result.title).toBe("");
+    }
+  });
+
+  it("tells the model never to return isJobPost true with an empty title", async () => {
     groqChatContent.mockResolvedValue(null);
     await classifyPost("We're hiring a Senior Backend Engineer", "");
     const call = groqChatContent.mock.calls[0]?.[0] as { messages: Array<{ role: string; content: string }> };
     const system = call.messages.find((m) => m.role === "system")?.content ?? "";
-    expect(system).toMatch(/empty title/i);
-    expect(system).toMatch(/isJobPost.*false/i);
+    expect(system).toMatch(/never return isJobPost true with an empty title/i);
   });
 });
 
@@ -120,7 +140,19 @@ describe("classifyPost regex fallback without a Groq key", () => {
 
     const withTitle = await classifyPost("We're hiring a Senior Backend Engineer to join our team at Razorpay!");
     expect(withTitle.isJobPost).toBe(true);
-    expect(withTitle.title).toContain("Senior Backend Engineer");
+    expect(withTitle.title).toBe("Senior Backend Engineer");
+    expect(groqChatContent).not.toHaveBeenCalled();
+  });
+
+  it("rejects hiring sentences that never name a role", async () => {
+    for (const text of [
+      "We're hiring for our Bengaluru office, all levels welcome. DM me.",
+      "Currently hiring across multiple teams, ping me",
+    ]) {
+      const result = await classifyPost(text);
+      expect(result.isJobPost).toBe(false);
+      expect(result.title).toBe("");
+    }
     expect(groqChatContent).not.toHaveBeenCalled();
   });
 });

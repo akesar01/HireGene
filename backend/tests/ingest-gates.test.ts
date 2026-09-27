@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   allowedRoleFamilies,
   evaluateJobGates,
@@ -31,6 +31,31 @@ describe("allowedRoleFamilies", () => {
   it("falls back to the default when the env value has no valid families", () => {
     expect([...allowedRoleFamilies({ INGEST_ROLE_FAMILIES: "nope" })].sort()).toEqual(["ai_ml", "engineering"]);
   });
+
+  describe("warning on discarded entries", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("warns with the dropped entries and the effective set", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      expect([...allowedRoleFamilies({ INGEST_ROLE_FAMILIES: "engineering;data" })].sort()).toEqual([
+        "ai_ml",
+        "engineering",
+      ]);
+      expect(warn).toHaveBeenCalledTimes(1);
+      const message = String(warn.mock.calls[0]?.[0]);
+      expect(message).toContain("engineering;data");
+      expect(message).toContain("engineering,ai_ml");
+    });
+
+    it("stays silent when every configured entry is valid", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      allowedRoleFamilies({ INGEST_ROLE_FAMILIES: "engineering,product" });
+      allowedRoleFamilies({});
+      expect(warn).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe("isOffTargetTitle", () => {
@@ -52,6 +77,13 @@ describe("isOffTargetTitle", () => {
     expect(isOffTargetTitle("Physical Design Engineer")).toBe(false);
     expect(isOffTargetTitle("DevOps Engineer II")).toBe(false);
     expect(isOffTargetTitle("Software Engineer - Database Internals")).toBe(false);
+  });
+
+  it("does not reject roles outside the brief such as Solutions Architect or plain Technical Support", () => {
+    expect(isOffTargetTitle("Solutions Architect")).toBe(false);
+    expect(isOffTargetTitle("Cloud Solutions Architect")).toBe(false);
+    expect(isOffTargetTitle("Technical Support")).toBe(false);
+    expect(isOffTargetTitle("Product Support Specialist")).toBe(false);
   });
 });
 
@@ -148,6 +180,19 @@ describe("evaluateJobGates on the 2026-09-26 production rows", () => {
       ENV,
     );
     expect(result).toMatchObject({ ok: true, title: "Senior Backend Engineer", company: "Razorpay" });
+  });
+
+  it("does not promote a hiring sentence fragment into the title", () => {
+    for (const rawText of [
+      "We're hiring for our Bengaluru office, all levels welcome. DM me.",
+      "Currently hiring across multiple teams, ping me",
+    ]) {
+      const result = evaluateJobGates(
+        { title: "", company: "Unknown", roleFamily: "engineering", authorTitle: "Talent Partner", rawText },
+        ENV,
+      );
+      expect(result).toMatchObject({ ok: false, reason: "unparseable" });
+    }
   });
 
   it("rejects the truncated Senior Sales Engineer rows as off_target even though the family is engineering", () => {

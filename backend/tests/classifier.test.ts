@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   isJobPost,
+  extractExplicitTitle,
   extractTitle,
   extractRoleFamily,
   extractSeniority,
@@ -122,9 +123,26 @@ describe("extractTechStack", () => {
   });
 });
 
+describe("extractExplicitTitle", () => {
+  it("stops the capture before connective clauses and punctuation", () => {
+    expect(extractExplicitTitle("We're hiring a Senior Backend Engineer to join our team")).toBe("Senior Backend Engineer");
+    expect(extractExplicitTitle("We're hiring a Senior Backend Engineer\nCome build with us.")).toBe("Senior Backend Engineer");
+    expect(extractExplicitTitle("Hiring Software Engineer III for our Bengaluru office. DM me.")).toBe("Software Engineer III");
+    expect(extractExplicitTitle("We're hiring for a Data Scientist, apply now!")).toBe("Data Scientist");
+    expect(extractExplicitTitle("Looking for an ML Engineer (Bengaluru) with LLM experience")).toBe("ML Engineer");
+  });
+
+  it("returns nothing for hiring sentences that never name a role", () => {
+    expect(extractExplicitTitle("We're hiring for our Bengaluru office, all levels welcome. DM me.")).toBe("");
+    expect(extractExplicitTitle("Currently hiring across multiple teams, ping me")).toBe("");
+    expect(extractExplicitTitle("We're hiring! Join us at Zepto.")).toBe("");
+    expect(extractExplicitTitle("My team is hiring. Need someone with Python skills.")).toBe("");
+  });
+});
+
 describe("extractTitle", () => {
   it("extracts title from 'hiring X' pattern", () => {
-    expect(extractTitle("We're hiring a Senior Backend Engineer to join our team")).toBe("Senior Backend Engineer to join our team");
+    expect(extractTitle("We're hiring a Senior Backend Engineer to join our team")).toBe("Senior Backend Engineer");
   });
 
   it("falls back to role family + seniority", () => {

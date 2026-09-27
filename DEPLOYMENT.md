@@ -160,7 +160,7 @@ Every scraped post passes through deterministic gates in `backend/src/lib/ingest
 | `no_url` | The Apify row had no post URL. |
 | `not_job` | The classifier (Groq, or the regex fallback without `GROQ_API_KEY`) did not see a concrete open role. A post that cannot name a title is never a job. |
 | `expired` | Posted more than `JOB_EXPIRY_DAYS` ago. |
-| `off_target` | The role family is not in `INGEST_ROLE_FAMILIES` (default `engineering,ai_ml`), or the title is an engineering-adjacent sales, solutions, pre-sales, customer success, support, recruiter, or talent role. |
+| `off_target` | The role family is not in `INGEST_ROLE_FAMILIES` (default `engineering,ai_ml`), or the title is a sales engineer, solutions engineer or consultant, pre-sales, customer success, support engineer, recruiter, or talent role. |
 | `unparseable` | The title is empty, under three letters, mostly punctuation or pipes, or a location line, and the post text names no role either. |
 | `duplicate` | Same `sourceUrl` with unchanged content, or an unexpired job from the same recruiter with the same normalized title and company posted within 14 days. |
 

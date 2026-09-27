@@ -60,7 +60,8 @@ vi.mock("../src/lib/prisma", () => ({ prisma }));
 
 // ─── Classifier fake keyed by post text ──────────────────────────────────────
 
-vi.mock("../src/lib/llm-classifier", () => ({
+vi.mock("../src/lib/llm-classifier", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/lib/llm-classifier")>()),
   classifyPost: vi.fn(async (text: string) => {
     const hit = classifications.get(text);
     if (!hit) throw new Error(`no fake classification for: ${text}`);

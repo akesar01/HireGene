@@ -2,6 +2,7 @@
 // gates. Pure: no Prisma, no LLM. Driven by scripts/reclassify-jobs.ts.
 
 import { evaluateJobGates, findNearDuplicate, type IngestSkipReason } from "./ingest-gates.js";
+import { isJobExpired } from "./job-expiry.js";
 
 export interface StoredJob {
   id: number;
@@ -20,9 +21,14 @@ export type JobDecision =
 
 /**
  * Jobs are processed oldest-first per recruiter so the first posting of a
- * role survives and later near-duplicates are the ones deleted.
+ * role survives and later near-duplicates are the ones deleted. Expired rows
+ * still get a decision but never anchor a near-duplicate.
  */
-export function decideJobs(jobs: StoredJob[], env: NodeJS.ProcessEnv = process.env): JobDecision[] {
+export function decideJobs(
+  jobs: StoredJob[],
+  env: NodeJS.ProcessEnv = process.env,
+  now: Date = new Date(),
+): JobDecision[] {
   const ordered = [...jobs].sort(
     (a, b) =>
       a.recruiterId - b.recruiterId ||
@@ -58,6 +64,7 @@ export function decideJobs(jobs: StoredJob[], env: NodeJS.ProcessEnv = process.e
     if (gate.title !== job.title) fix.title = gate.title;
     if (gate.company !== job.company) fix.company = gate.company;
     decisions.push({ id: job.id, action: "keep", ...(Object.keys(fix).length > 0 ? { fix } : {}) });
+    if (isJobExpired(job.postedAt, now)) continue;
     siblings.push({ id: job.id, title: gate.title, company: gate.company, postedAt: job.postedAt });
     kept.set(job.recruiterId, siblings);
   }

@@ -18,7 +18,7 @@ const VALID_TECH_STACKS = [
 ];
 
 // Must match Prisma RoleFamily enum
-const VALID_ROLE_FAMILIES = [
+export const VALID_ROLE_FAMILIES = [
   "engineering", "ai_ml", "product", "design", "data", "growth",
   "marketing", "content", "ops", "founders_office", "sales",
   "strategy", "finance", "business", "people",
@@ -101,11 +101,7 @@ export async function classifyPost(
     return {
       isJobPost,
       title: isJobPost ? title : "",
-      roleFamily: sanitizeEnum(parsed.roleFamily, [
-        "engineering", "ai_ml", "product", "design", "data", "growth",
-        "marketing", "content", "ops", "founders_office", "sales",
-        "strategy", "finance", "business", "people",
-      ], regexExtractRoleFamily(text)),
+      roleFamily: sanitizeEnum(parsed.roleFamily, VALID_ROLE_FAMILIES, regexExtractRoleFamily(text)),
       seniority: sanitizeEnum(parsed.seniority, [
         "intern", "junior", "mid", "senior", "lead", "staff", "head",
       ], regexExtractSeniority(text)),

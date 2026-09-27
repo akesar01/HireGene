@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { JOB_EXPIRY_DAYS } from "../src/lib/config";
 import { MS_PER_DAY } from "../src/lib/job-expiry";
 import { decideJobs, describeDecision, type StoredJob } from "../src/lib/reclassify-jobs";
 
@@ -192,5 +193,34 @@ describe("decideJobs on the 16 production rows", () => {
     const a = row({ recruiterId: 1, title: "Backend Engineer", company: "Zepto", roleFamily: "engineering" });
     const b = row({ recruiterId: 2, title: "Backend Engineer", company: "Zepto", roleFamily: "engineering" });
     expect(decideJobs([a, b], ENV).every((d) => d.action === "keep")).toBe(true);
+  });
+
+  it("does not delete an unexpired row as a duplicate of an expired original", () => {
+    nextId = 1;
+    const expired = row({
+      title: "Backend Engineer",
+      company: "Zepto",
+      roleFamily: "engineering",
+      postedAt: daysAgo(JOB_EXPIRY_DAYS + 1),
+    });
+    const live = row({
+      title: "Backend Engineer",
+      company: "Zepto",
+      roleFamily: "engineering",
+      postedAt: daysAgo(JOB_EXPIRY_DAYS - 10),
+    });
+    const decisions = decideJobs([expired, live], ENV);
+    expect(decisions).toEqual([
+      { id: expired.id, action: "keep" },
+      { id: live.id, action: "keep" },
+    ]);
+  });
+
+  it("still collapses near-duplicates among unexpired rows", () => {
+    nextId = 1;
+    const first = row({ title: "Backend Engineer", company: "Zepto", roleFamily: "engineering", postedAt: daysAgo(12) });
+    const second = row({ title: "Backend Engineer", company: "Zepto", roleFamily: "engineering", postedAt: daysAgo(2) });
+    const decisions = decideJobs([first, second], ENV);
+    expect(decisions.find((d) => d.id === second.id)).toMatchObject({ action: "delete", reason: "duplicate" });
   });
 });

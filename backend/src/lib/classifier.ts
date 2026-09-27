@@ -143,13 +143,19 @@ export function extractTechStack(text: string): string[] {
   return stacks;
 }
 
+const ROLE_NOUN = /\b(?:engineer|developer|scientist|architect|sde|manager|analyst|designer|lead|intern)s?\b/i;
+const TITLE_CLAUSE_TAIL = /(?:^|\s+)(?:for|to|in|at|across|who|with)\b[\s\S]*$/i;
+
 /**
  * Title named explicitly in the post ("hiring a X", "looking for X").
- * Returns "" when the post never names a role; no synthetic fallback.
+ * The capture stops at clause punctuation and connective words, and must
+ * name a role noun. Returns "" otherwise; no synthetic fallback.
  */
 export function extractExplicitTitle(text: string): string {
-  const hiringMatch = text.match(/(?:hiring|looking for)\s+(?:a\s+|an\s+)?([^\n.]{5,60})/i);
-  return hiringMatch ? hiringMatch[1].trim() : "";
+  const hiringMatch = text.match(/(?:hiring|looking for)\s+(?:for\s+)?(?:an?\s+)?([^\n.,!?;:(]{1,60})/i);
+  if (!hiringMatch) return "";
+  const title = hiringMatch[1].replace(TITLE_CLAUSE_TAIL, "").trim();
+  return ROLE_NOUN.test(title) ? title : "";
 }
 
 export function extractTitle(text: string): string {
