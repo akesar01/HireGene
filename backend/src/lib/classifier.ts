@@ -143,10 +143,19 @@ export function extractTechStack(text: string): string[] {
   return stacks;
 }
 
+/**
+ * Title named explicitly in the post ("hiring a X", "looking for X").
+ * Returns "" when the post never names a role; no synthetic fallback.
+ */
+export function extractExplicitTitle(text: string): string {
+  const hiringMatch = text.match(/(?:hiring|looking for)\s+(?:a\s+|an\s+)?([^\n.]{5,60})/i);
+  return hiringMatch ? hiringMatch[1].trim() : "";
+}
+
 export function extractTitle(text: string): string {
   // Try to find "hiring [X]" or "looking for [X]" patterns
-  const hiringMatch = text.match(/(?:hiring|looking for)\s+(?:a\s+|an\s+)?([^\n.]{5,60})/i);
-  if (hiringMatch) return hiringMatch[1].trim();
+  const explicit = extractExplicitTitle(text);
+  if (explicit) return explicit;
 
   // Fallback: look for role + seniority
   const seniority = extractSeniority(text);

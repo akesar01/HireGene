@@ -2,7 +2,7 @@
 
 import {
   isJobPost as regexIsJobPost,
-  extractTitle as regexExtractTitle,
+  extractExplicitTitle as regexExtractExplicitTitle,
   extractRoleFamily as regexExtractRoleFamily,
   extractSeniority as regexExtractSeniority,
   extractRemoteMode as regexExtractRemoteMode,
@@ -55,7 +55,10 @@ CRITICAL RULES:
 4. If the post is someone celebrating being hired ("I got hired", "I accepted an offer"), isJobPost should be false.
 5. Hashtags like #hiring, #techcareers, #jobsearch are NOT enough. Ignore them.
 6. Opinion / advice posts are not job posts, even if they talk about recruiters, hiring managers, LLMs, or the job market. Signals of commentary: "Do you agree?", "Views are my own", "I see this every week", criticizing JD wording.
-7. A specific open role has a real title and an ask to apply, refer, or DM. If you cannot name the position being filled, isJobPost is false.`;
+7. A specific open role has a real title and an ask to apply, refer, or DM. If you cannot name the position being filled, isJobPost is false.
+8. Never return isJobPost true with an empty title. If the post only says the author is hiring, lists a team, or points to a careers page without naming a concrete role, set isJobPost to false and title to "".
+9. The title must be a job title, never a location, a company name, a pipe-separated header fragment, or a sentence. "Bengaluru", "| Swiggy | Bengaluru", and "to partner with our sales team" are not titles.
+10. Posts by recruiters describing what they recruit for in general (a headline like "Hiring Data Scientists for X") are not job posts unless the post body names one concrete opening.`;
 
 export async function classifyPost(
   text: string,
@@ -88,11 +91,16 @@ export async function classifyPost(
     const parsed = JSON.parse(content) as LLMClassification;
     const llmSaysJob = Boolean(parsed.isJobPost);
     const regexSaysJob = regexIsJobPost(text);
+    const llmTitle = typeof parsed.title === "string" ? parsed.title.trim() : "";
+    // A job post must name a concrete role: the model's title, else one the
+    // post states explicitly. Without either, it is not a job post.
+    const title = (llmSaysJob && llmTitle) || regexExtractExplicitTitle(text);
+    const isJobPost = (llmSaysJob || regexSaysJob) && title.length > 0;
 
     // Validate and sanitize
     return {
-      isJobPost: llmSaysJob || regexSaysJob,
-      title: typeof parsed.title === "string" ? parsed.title : regexExtractTitle(text),
+      isJobPost,
+      title: isJobPost ? title : "",
       roleFamily: sanitizeEnum(parsed.roleFamily, [
         "engineering", "ai_ml", "product", "design", "data", "growth",
         "marketing", "content", "ops", "founders_office", "sales",
@@ -130,9 +138,12 @@ function sanitizeEnum(
 }
 
 function regexFallback(text: string): LLMClassification {
+  // Same gate as the LLM path: no explicit title, no job post.
+  const title = regexExtractExplicitTitle(text);
+  const isJobPost = regexIsJobPost(text) && title.length > 0;
   return {
-    isJobPost: regexIsJobPost(text),
-    title: regexExtractTitle(text),
+    isJobPost,
+    title: isJobPost ? title : "",
     roleFamily: regexExtractRoleFamily(text),
     seniority: regexExtractSeniority(text),
     remoteMode: regexExtractRemoteMode(text),

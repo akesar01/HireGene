@@ -4,6 +4,12 @@ import { classifyPost } from "./llm-classifier.js";
 import { computeExpiresAt, isJobExpired, jobExpiryCutoff } from "./job-expiry.js";
 import { inferCompany } from "./extract-company.js";
 import {
+  evaluateJobGates,
+  findNearDuplicate,
+  SKIP_REASONS,
+  type IngestSkipReason,
+} from "./ingest-gates.js";
+import {
   ApifyConcurrentLimitError,
   isApifyConcurrentLimitError,
 } from "./apify-limits.js";
@@ -341,27 +347,31 @@ export async function waitAndIngest(
   };
 }
 
-type SkipReason = "no_url" | "not_job" | "expired" | "duplicate";
+export type SkipReason = IngestSkipReason;
 
-function summarizeSkipReasons(reasons: Record<string, number>): string {
+export function summarizeSkipReasons(reasons: Record<string, number>): string {
   return Object.entries(reasons)
     .filter(([, count]) => count > 0)
     .map(([reason, count]) => `${reason}=${count}`)
     .join(",");
 }
 
-async function ingestPosts(
+export async function ingestPosts(
   recruiter: { id: number; name: string },
   posts: ApifyPost[],
 ): Promise<{ jobsCreated: number; jobsSkipped: number; skipReasons: Record<SkipReason, number> }> {
   let jobsCreated = 0;
   let jobsSkipped = 0;
-  const skipReasons: Record<SkipReason, number> = {
-    no_url: 0,
-    not_job: 0,
-    expired: 0,
-    duplicate: 0,
-  };
+  const skipReasons = Object.fromEntries(
+    SKIP_REASONS.map((reason) => [reason, 0]),
+  ) as Record<SkipReason, number>;
+
+  // Unexpired jobs from this recruiter, for the near-duplicate gate. Jobs
+  // created in this run are appended so a batch cannot duplicate itself.
+  const recruiterJobs = await prisma.job.findMany({
+    where: { recruiterId: recruiter.id, postedAt: { gt: jobExpiryCutoff() } },
+    select: { id: true, title: true, company: true, postedAt: true, sourceUrl: true },
+  });
 
   for (const post of posts) {
     const rawText = post.text ?? post.content ?? "";
@@ -404,7 +414,23 @@ async function ingestPosts(
       : post.author_name ?? recruiter.name;
     const authorAvatar = post.author?.avatar ?? post.author?.profile_picture ?? post.profile_picture ?? null;
     const isRepost = post.is_repost ?? (post.post_type === "repost" || post.type === "repost") ?? !!post.reshared_post;
-    const company = await resolveJobCompany(authorHeadline, rawText, recruiter.id);
+    const inferredCompany = await resolveJobCompany(authorHeadline, rawText, recruiter.id);
+
+    const gate = evaluateJobGates({
+      title: classification.title,
+      company: inferredCompany,
+      roleFamily: classification.roleFamily,
+      authorTitle: authorHeadline,
+      rawText,
+    });
+    if (!gate.ok) {
+      jobsSkipped++;
+      skipReasons[gate.reason]++;
+      console.log(`[ingest] skip ${gate.reason}: ${gate.detail} (${sourceUrl})`);
+      continue;
+    }
+    const { title, company } = gate;
+
     const existing = await prisma.job.findUnique({ where: { sourceUrl } });
 
     if (existing) {
@@ -418,33 +444,46 @@ async function ingestPosts(
         data: {
           rawText,
           contentHash,
-          title: classification.title,
+          title,
           roleFamily: classification.roleFamily as never,
           seniority: classification.seniority as never,
           remoteMode: classification.remoteMode as never,
           stack: classification.techStack as never[],
           description: classification.description,
           company,
-          roleBadge: `${classification.title} @ ${company}`,
+          roleBadge: `${title} @ ${company}`,
           authorAvatar,
           commentCount: post.stats?.comments ?? post.comments ?? 0,
           postedAt: postedDate,
           expiresAt,
         },
       });
+      const tracked = recruiterJobs.find((job) => job.id === existing.id);
+      if (tracked) Object.assign(tracked, { title, company, postedAt: postedDate });
       jobsCreated++;
       continue;
     }
 
-    await prisma.job.create({
+    const nearDuplicate = findNearDuplicate(
+      { title, company, postedAt: postedDate },
+      recruiterJobs.filter((job) => job.sourceUrl !== sourceUrl),
+    );
+    if (nearDuplicate) {
+      jobsSkipped++;
+      skipReasons.duplicate++;
+      console.log(`[ingest] skip duplicate: "${title}" @ ${company} matches ${nearDuplicate.sourceUrl}`);
+      continue;
+    }
+
+    const created = await prisma.job.create({
       data: {
         recruiterId: recruiter.id,
-        title: classification.title,
+        title,
         company,
         author: authorName,
         authorTitle: authorHeadline,
         authorAvatar,
-        roleBadge: `${classification.title} @ ${company}`,
+        roleBadge: `${title} @ ${company}`,
         source: "linkedin",
         sourceUrl,
         isRepost,
@@ -459,7 +498,9 @@ async function ingestPosts(
         postedAt: postedDate,
         expiresAt,
       },
+      select: { id: true, title: true, company: true, postedAt: true, sourceUrl: true },
     });
+    recruiterJobs.push(created);
     jobsCreated++;
   }
 

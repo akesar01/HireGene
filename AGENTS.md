@@ -78,6 +78,8 @@ The backend is a Hono app with Prisma + PostgreSQL. It provides:
 
 The frontend fetches jobs from the backend API. The API contract is aligned with the `Job` interface in `frontend/src/lib/data.ts`.
 
+Ingest path: `ingestPosts` in `backend/src/lib/apify.ts` -> `classifyPost` (`llm-classifier.ts`, regex fallback in `classifier.ts`) -> `inferCompany` (`extract-company.ts`) -> deterministic gates in `backend/src/lib/ingest-gates.ts` -> `prisma.job.create`. The feed is engineering-only by default (`INGEST_ROLE_FAMILIES`); skip reasons and the `scripts/reclassify-jobs.ts` cleanup are documented under "Ingest quality gates" in `DEPLOYMENT.md`. Add any new junk pattern as a failing test in `backend/tests/` first; the gates are pure functions and must never call the LLM.
+
 Frontend config (`frontend/src/lib/config.ts`) centralizes `BACKEND_URL` and `API_KEY` — all client-side fetches import from there.
 
 ## Deployment (Vercel)
@@ -101,3 +103,10 @@ See **[DEPLOYMENT.md](./DEPLOYMENT.md)** for complete step-by-step instructions 
 - Backend deployment gotchas & fixes (ESM, Prisma, catch-all routing, CORS)
 - Local development setup
 - Redeploy commands
+
+## Maintaining this file
+
+Keep this file for knowledge useful to almost every future agent session in this project.
+Do not repeat what the codebase already shows; point to the authoritative file or command instead.
+Prefer rewriting or pruning existing entries over appending new ones.
+When updating this file, preserve this bar for all agents and keep entries concise.

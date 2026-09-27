@@ -96,6 +96,8 @@ npx vercel env add GROQ_MODEL production
 # Value: openai/gpt-oss-120b
 npx vercel env add APIFY_MAX_CONCURRENT production
 # Value: 5
+npx vercel env add INGEST_ROLE_FAMILIES production
+# Optional. Value: engineering,ai_ml (default). Comma-separated RoleFamily values allowed into the feed.
 ```
 
 **`CORS_ORIGIN`** must be a comma-separated list of allowed origins:
@@ -148,6 +150,33 @@ curl -X POST https://backend-umber-nu-43.vercel.app/api/cron/scrape \
 ```
 
 Use `?once=1` to scrape a single due recruiter and stop.
+
+### Ingest quality gates
+
+Every scraped post passes through deterministic gates in `backend/src/lib/ingest-gates.ts` before it becomes a `Job`. A post is skipped, and counted in `ApifyRunLog.errorMsg` (for example `not_job=3,off_target=2,duplicate=1`), for one of these reasons:
+
+| Skip reason | Meaning |
+|-------------|---------|
+| `no_url` | The Apify row had no post URL. |
+| `not_job` | The classifier (Groq, or the regex fallback without `GROQ_API_KEY`) did not see a concrete open role. A post that cannot name a title is never a job. |
+| `expired` | Posted more than `JOB_EXPIRY_DAYS` ago. |
+| `off_target` | The role family is not in `INGEST_ROLE_FAMILIES` (default `engineering,ai_ml`), or the title is an engineering-adjacent sales, solutions, pre-sales, customer success, support, recruiter, or talent role. |
+| `unparseable` | The title is empty, under three letters, mostly punctuation or pipes, or a location line, and the post text names no role either. |
+| `duplicate` | Same `sourceUrl` with unchanged content, or an unexpired job from the same recruiter with the same normalized title and company posted within 14 days. |
+
+Companies that look like sentence fragments or cities are replaced by the company in the recruiter headline, else `Unknown`; that is a repair, not a skip.
+
+### Cleaning existing rows
+
+`backend/scripts/reclassify-jobs.ts` applies the same gates to every stored job using only the stored fields (no LLM calls). Dry run by default; it prints one line per job with `keep` or `delete` and the reason, then a summary.
+
+```bash
+cd backend
+npx tsx scripts/reclassify-jobs.ts            # dry run
+npx tsx scripts/reclassify-jobs.ts --apply    # delete failing rows (plus their votes and applications) and repair companies
+```
+
+`INGEST_ROLE_FAMILIES` is honoured here too. Run the dry run first and read the list before applying.
 
 ---
 

@@ -27,10 +27,73 @@ const GENERIC_SEGMENTS = new Set([
   "followers",
 ]);
 
+/** Places that sometimes leak into the company slot from pipe headers. */
+export const LOCATION_WORDS = new Set([
+  "bengaluru",
+  "bangalore",
+  "hyderabad",
+  "pune",
+  "chennai",
+  "delhi",
+  "delhi ncr",
+  "gurugram",
+  "gurgaon",
+  "noida",
+  "mumbai",
+  "kolkata",
+  "remote",
+  "india",
+]);
+
+export const MAX_COMPANY_LENGTH = 40;
+
+/** Lowercase words that start a sentence fragment rather than a brand name. */
+const FRAGMENT_LEAD_WORDS = new Set([
+  "a", "an", "the", "and", "or", "but", "our", "we", "you", "your", "this", "that",
+  "these", "those", "with", "for", "to", "of", "in", "on", "at", "by", "from", "as",
+  "is", "are", "be", "it", "its", "if", "so", "more", "most", "some", "all", "any",
+  "new", "join", "build", "building", "work", "working", "help", "helping", "scale",
+  "massive", "growing", "fast", "leading", "world", "one", "top", "best", "global",
+]);
+
+/**
+ * True when a company value looks like a sentence fragment, a city, or is
+ * otherwise not a name we want on a job card. "Unknown" is allowed.
+ */
+export function isSuspiciousCompany(value: string): boolean {
+  const name = value.trim();
+  if (!name) return true;
+  if (name.toLowerCase() === "unknown") return false;
+  if (name.length > MAX_COMPANY_LENGTH) return true;
+  if (LOCATION_WORDS.has(name.toLowerCase())) return true;
+  if (/ (?:and|the) /.test(name)) return true;
+  const words = name.split(/\s+/);
+  const first = words[0] ?? "";
+  if (/^[a-z]+$/.test(first)) {
+    if (FRAGMENT_LEAD_WORDS.has(first)) return true;
+    if (words.length >= 3) return true;
+  }
+  return false;
+}
+
+/** Drop "lEx-JPMorganl", "| Ex-Amazon", "(Ex-Amazon)" style headline noise. */
+function stripHeadlineNoise(raw: string): string {
+  return raw
+    .replace(/[|(\[]?\s*\bl?ex-[A-Za-z0-9&.+\-]*l?[)\]]?/gi, " ")
+    .replace(/[|]+/g, " | ")
+    .replace(/\s+/g, " ")
+    .replace(/^(?:\s*\|\s*)+/, "")
+    .replace(/(?:\s*\|\s*)+$/, "")
+    .trim();
+}
+
+const SENTENCE_END = /[.!?,](?:\s|$)|\n/;
+
 const STOP_AFTER = /\s+(?:[-–—|•]|\bapply now\b|\bwe'?re (?:looking|hiring)\b|#)/i;
 
 export function cleanCompanyName(raw: string): string {
-  let name = raw.replace(/[#*]/g, " ").replace(/\s+/g, " ").trim();
+  let name = stripHeadlineNoise(raw.replace(/[#*]/g, " "));
+  if (name.includes("|")) name = name.split("|")[0]?.trim() ?? "";
   name = name.replace(/[.,;:!]+$/g, "").trim();
   name = name.replace(/^(?:the|our)\s+/i, "").trim();
   name = name.replace(/\s+(?:for|in|on|to|with|and)$/i, "").trim();
@@ -53,6 +116,7 @@ export function cleanCompanyName(raw: string): string {
   const wordCount = name.split(/\s+/).length;
   const looksLikeFirm = /\b(corp|inc|llc|ltd|labs|games|tech|technologies|global|india|ai)\b/i.test(name);
   if (wordCount >= 4 && !looksLikeFirm) return "";
+  if (isSuspiciousCompany(name)) return "";
   return name;
 }
 
@@ -84,7 +148,8 @@ function fromHiringLine(text: string): string | null {
     /(?:we'?re hiring|hiring)\s*\|\s*[^|\n]{3,80}\|\s*([A-Za-z0-9&.+\- ]{2,40})/i,
   );
   if (pipeCompany) {
-    const cleaned = cleanCompanyName(pipeCompany[1]);
+    // Stop at the end of the sentence: "| Baazi Games. Kubernetes, AWS" -> "Baazi Games".
+    const cleaned = cleanCompanyName(pipeCompany[1].split(SENTENCE_END)[0] ?? "");
     if (cleaned) return cleaned;
   }
   return null;
