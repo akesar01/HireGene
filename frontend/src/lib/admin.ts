@@ -181,6 +181,7 @@ export interface RunResult {
   holdout: number;
   failed: number;
   inactive: number;
+  alreadyClaimed: number;
   remaining: number;
   exhaustedBudget: boolean;
   completed: boolean;

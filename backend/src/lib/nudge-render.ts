@@ -26,7 +26,8 @@ export interface RenderInput {
   campaignKey: string;
   /** Frontend origin, e.g. https://skiptheboard.in */
   siteUrl: string;
-  unsubscribeUrl: string;
+  /** Null (test sends) renders an inert footer instead of a working link. */
+  unsubscribeUrl: string | null;
   preferencesUrl: string;
   /** Variant overrides. Templates accept {count} {companies} {name}. */
   subjectTemplate?: string | null;
@@ -46,6 +47,7 @@ export const DEFAULT_INTRO_TEMPLATE =
   "These are the {count} posts on SkipTheBoard that best match your resume right now. Each one links to the original hiring post, so you can message the person who wrote it.";
 
 export const UTM_SOURCE = "nudge";
+export const TEST_SEND_UNSUBSCRIBE_NOTE = "unsubscribe disabled in test sends";
 
 export function escapeHtml(value: string): string {
   return value
@@ -140,6 +142,10 @@ export function renderNudgeEmail(input: RenderInput): RenderedEmail {
   const feedUrl = siteLink(input.siteUrl, "/", input.campaignKey, "feed");
   const profileUrl = siteLink(input.siteUrl, "/profile", input.campaignKey, "profile");
   const greeting = vars.name === "there" ? "Hi there," : `Hi ${vars.name},`;
+  const unsubscribeHtml = input.unsubscribeUrl
+    ? `<a href="${escapeHtml(input.unsubscribeUrl)}" style="color:#6b7280;">Unsubscribe in one click</a>`
+    : `<span style="color:#6b7280;">${TEST_SEND_UNSUBSCRIBE_NOTE}</span>`;
+  const unsubscribeText = input.unsubscribeUrl ? `Unsubscribe in one click: ${input.unsubscribeUrl}` : TEST_SEND_UNSUBSCRIBE_NOTE;
 
   const jobsHtml = input.jobs
     .map((job, index) => {
@@ -193,7 +199,7 @@ ${jobsHtml}
 <tr><td style="padding-top:20px;font-size:12px;color:#9ca3af;line-height:1.6;">
   You get this because you signed in to SkipTheBoard and uploaded a resume.
   <a href="${escapeHtml(input.preferencesUrl)}" style="color:#6b7280;">Change frequency</a> &middot;
-  <a href="${escapeHtml(input.unsubscribeUrl)}" style="color:#6b7280;">Unsubscribe in one click</a><br>
+  ${unsubscribeHtml}<br>
   SkipTheBoard &middot; ${escapeHtml(contact)} &middot; We never sell or share your email.
 </td></tr>
 </table>
@@ -230,7 +236,7 @@ ${jobsHtml}
     "",
     "You get this because you signed in to SkipTheBoard and uploaded a resume.",
     `Change frequency: ${input.preferencesUrl}`,
-    `Unsubscribe in one click: ${input.unsubscribeUrl}`,
+    unsubscribeText,
     `SkipTheBoard · ${contact} · We never sell or share your email.`,
   ].join("\n");
 

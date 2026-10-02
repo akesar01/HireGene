@@ -148,7 +148,7 @@ async function handleNudges(c: Context) {
   const result = await runCampaign({ campaignId });
   console.log(
     `[cron] nudges: campaign=${result.campaignKey} processed=${result.processed} sent=${result.sent} ` +
-      `skipped=${result.skipped} holdout=${result.holdout} failed=${result.failed} remaining=${result.remaining}` +
+      `skipped=${result.skipped} holdout=${result.holdout} failed=${result.failed} alreadyClaimed=${result.alreadyClaimed} remaining=${result.remaining}` +
       `${result.dryRun ? " dryRun=true" : ""}`,
   );
   if (result.remaining > 0) continueCampaignLater(campaignId);

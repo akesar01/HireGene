@@ -44,12 +44,22 @@ describe("senior override", () => {
     expect(minimumYears("7-12 YOE in backend")).toBe(7);
     expect(minimumYears("5+ years of experience")).toBe(5);
     expect(minimumYears("3–5 years of experience building scalable systems")).toBe(3);
+    expect(minimumYears("Exp. 6 yrs in Java, minimum 4 yrs with Spring")).toBe(4);
+    expect(minimumYears("at least 8 years")).toBe(8);
+    expect(minimumYears("6+ yrs")).toBe(6);
     expect(minimumYears("no years here")).toBeNull();
+  });
+
+  it("ignores years figures that are not about experience", () => {
+    expect(minimumYears("a fintech with 12 years in market")).toBeNull();
+    expect(minimumYears("products built over 10 years")).toBeNull();
+    expect(minimumYears("founded 20 years ago; 3+ years of experience required")).toBe(3);
   });
 
   it("flags SDE III and 5+ years as senior even when stored as mid", () => {
     expect(isSeniorRole({ title: "SDE III – Backend", description: [] })).toBe(true);
     expect(isSeniorRole({ title: "Backend Engineer", description: ["7-12 YOE", "Hybrid in Delhi NCR"] })).toBe(true);
+    expect(isSeniorRole({ title: "Backend Engineer", description: ["5+ years of experience"] })).toBe(true);
     expect(isSeniorRole({ title: "Staff Engineer", description: [] })).toBe(true);
     expect(effectiveSeniority({ title: "SDE III – Backend", description: [], seniority: "mid" })).toBe("senior");
   });
@@ -58,6 +68,7 @@ describe("senior override", () => {
     expect(isSeniorRole({ title: "Software Engineer", description: ["1-3 years of experience as an SDE."] })).toBe(false);
     expect(effectiveSeniority({ title: "DevOps Engineer II", description: ["3–5 years of experience"], seniority: "mid" })).toBe("mid");
     expect(effectiveSeniority({ title: "Associate SDE", description: ["Looking for freshers"], seniority: "intern" })).toBe("intern");
+    expect(effectiveSeniority({ title: "SDE 1", description: ["a fintech with 12 years in market", "Bangalore"], seniority: "junior" })).toBe("junior");
   });
 
   it("does not demote a role that is already senior", () => {
@@ -138,6 +149,15 @@ describe("selectJobsForUser", () => {
     expect(senior.levelLabel).toBe("Senior / SDE-3+");
     expect(picks[0].id).toBe(23);
     expect(senior.matchPercent).toBeLessThan(picks[0].matchPercent);
+  });
+
+  it("keeps an SDE-1 post junior when a bullet states the company's age rather than experience", () => {
+    const jobs = [job({ id: 30, description: ["a fintech with 12 years in market", "Bangalore"] })];
+    const { picks } = selectJobsForUser({ jobs, profile: sde1Profile, now: NOW });
+    expect(picks).toHaveLength(1);
+    expect(picks[0].seniority).toBe("junior");
+    expect(picks[0].seniorOverride).toBe(false);
+    expect(picks[0].levelLabel).toBe("SDE-1 level");
   });
 
   it("never repeats a job already sent to this user", () => {

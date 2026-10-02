@@ -1,19 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { BACKEND_URL } from "@/lib/config";
 
 type State =
+  | { kind: "ready" }
   | { kind: "working" }
   | { kind: "done"; email: string | null; subscribed: boolean }
   | { kind: "error"; message: string };
 
+const MISSING_TOKEN = "This link is missing its token. Open the unsubscribe link from the email again.";
+
 export default function UnsubscribeClient() {
   const params = useSearchParams();
   const token = params.get("t") ?? "";
-  const [state, setState] = useState<State>({ kind: "working" });
+  const [state, setState] = useState<State>({ kind: "ready" });
   const [busy, setBusy] = useState(false);
 
   async function call(action?: "resubscribe") {
@@ -26,24 +29,15 @@ export default function UnsubscribeClient() {
     return body;
   }
 
-  useEffect(() => {
-    if (!token) {
-      setState({ kind: "error", message: "This link is missing its token. Open the unsubscribe link from the email again." });
-      return;
+  async function unsubscribe() {
+    setState({ kind: "working" });
+    try {
+      const body = await call();
+      setState({ kind: "done", email: body.email ?? null, subscribed: body.subscribed ?? false });
+    } catch (err) {
+      setState({ kind: "error", message: err instanceof Error ? err.message : "This link is not valid." });
     }
-    let cancelled = false;
-    call()
-      .then((body) => {
-        if (!cancelled) setState({ kind: "done", email: body.email ?? null, subscribed: body.subscribed ?? false });
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setState({ kind: "error", message: err instanceof Error ? err.message : "This link is not valid." });
-      });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+  }
 
   async function toggle() {
     if (state.kind !== "done") return;
@@ -58,21 +52,45 @@ export default function UnsubscribeClient() {
     }
   }
 
-  if (state.kind === "working") {
-    return <p className="text-sm text-muted">Updating your email settings…</p>;
-  }
-
-  if (state.kind === "error") {
+  if (!token || state.kind === "error") {
+    const message = state.kind === "error" ? state.message : MISSING_TOKEN;
     return (
       <div>
         <h1 className="text-xl font-bold text-foreground">We could not update that</h1>
-        <p className="mt-2 text-sm text-muted">{state.message}</p>
+        <p className="mt-2 text-sm text-muted">{message}</p>
         <p className="mt-4 text-sm text-muted">
           You can also sign in and turn emails off on your <Link href="/profile#email" className="text-accent hover:underline">profile</Link>,
           or write to <a href="mailto:hello@skiptheboard.in" className="text-accent hover:underline">hello@skiptheboard.in</a>.
         </p>
       </div>
     );
+  }
+
+  if (state.kind === "ready") {
+    return (
+      <div>
+        <h1 className="text-xl font-bold text-foreground">Unsubscribe from job emails?</h1>
+        <p className="mt-2 text-sm text-muted">
+          SkipTheBoard will stop emailing you matching jobs. It takes effect immediately, and you can undo it on the next screen.
+        </p>
+        <div className="mt-6 flex flex-wrap items-center gap-3 text-sm">
+          <button
+            type="button"
+            onClick={unsubscribe}
+            className="inline-flex items-center bg-accent text-white font-semibold px-5 py-2.5 rounded-lg hover:bg-accent-hover transition-colors"
+          >
+            Unsubscribe
+          </button>
+          <Link href="/profile#email" className="text-muted hover:text-foreground">
+            Change frequency or pause instead
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (state.kind === "working") {
+    return <p className="text-sm text-muted">Updating your email settings…</p>;
   }
 
   return (

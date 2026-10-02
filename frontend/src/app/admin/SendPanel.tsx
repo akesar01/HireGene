@@ -108,6 +108,7 @@ export default function SendPanel({ getToken }: { getToken: () => Promise<string
       setLastRun(result);
       setNotice(
         `${result.dryRun ? "Dry run" : "Send"} ${result.campaignKey}: ${result.sent} emailed, ${result.skipped} skipped (no jobs), ${result.holdout} holdout, ${result.failed} failed, ${result.inactive} not subscribed` +
+          (result.alreadyClaimed > 0 ? `, ${result.alreadyClaimed} already handled by another run` : "") +
           (result.remaining > 0 ? `; ${result.remaining} continue in the background.` : "."),
       );
       await loadSchedule();
@@ -233,7 +234,7 @@ export default function SendPanel({ getToken }: { getToken: () => Promise<string
                 ) : (
                   <iframe title="Email preview" srcDoc={preview.rendered.html} sandbox="" className="w-full h-[600px] rounded-lg border border-card-border bg-white" />
                 )}
-                <p className="text-xs text-muted-light">Test sends go to the address you type, prefixed [TEST], and are not recorded as a campaign send. Last sent to this user: {fmtDate(selected?.lastSentAt)}.</p>
+                <p className="text-xs text-muted-light">Test sends go to the address you type, prefixed [TEST], carry no working unsubscribe link, and are not recorded as a campaign send. Last sent to this user: {fmtDate(selected?.lastSentAt)}.</p>
               </div>
             )}
           </div>

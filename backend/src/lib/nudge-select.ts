@@ -56,18 +56,27 @@ export interface RankedJob {
 const SENIOR_TITLE_RE =
   /\bSDE[\s-]?(?:3|III|4|IV)\b|\bSE[\s-]?(?:3|III)\b|\bL[5-9]\b|\bsenior\b|\bsr\.?\s|\bsr\.?$|\bstaff\b|\blead\b|\bprincipal\b|\barchitect\b|\bmanager\b|\bhead\s+of\b|\bdirector\b/i;
 
-// "5+ years", "7-12 YOE", "minimum 6 yrs", "at least 5 years of experience"
-const YEARS_RE = /(\d{1,2})\s*(?:\+|\s*(?:-|–|to)\s*\d{1,2})?\s*\+?\s*(?:years?|yrs?|yoe)\b/gi;
+// A years figure counts only as an "N+" form or beside an experience cue in
+// the same clause: "5+ years", "7-12 YOE", "minimum 6 yrs", "at least 5 years
+// of experience". "a fintech with 12 years in market" does not count.
+const YEARS_RE = /\b(\d{1,2})\s*(\+)?(?:\s*(?:-|–|to)\s*(\d{1,2}))?\s*(\+)?\s*(?:years?|yrs?|yoe)\b/gi;
+const EXPERIENCE_CUE_RE = /\bexperience|\bexp\b|\byoe\b|\bminimum\b|\bmin\b|\bat\s?least\b/i;
+const ABBREVIATION_PERIOD_RE = /\b(exp|min|yrs?)\.(?=\s|$)/gi;
+const CLAUSE_BREAK_RE = /\.(?=\s|$)|[;|\n•·]/;
 
 export const SENIOR_YEARS_MIN = 5;
 
 /** Smallest stated years-of-experience figure in the text, or null. */
 export function minimumYears(text: string): number | null {
   let min: number | null = null;
-  for (const match of text.matchAll(YEARS_RE)) {
-    const years = Number(match[1]);
-    if (!Number.isFinite(years) || years > 40) continue;
-    min = min === null ? years : Math.min(min, years);
+  for (const clause of text.replace(ABBREVIATION_PERIOD_RE, "$1").split(CLAUSE_BREAK_RE)) {
+    const cued = EXPERIENCE_CUE_RE.test(clause);
+    for (const match of clause.matchAll(YEARS_RE)) {
+      const years = Number(match[1]);
+      if (!Number.isFinite(years) || years > 40) continue;
+      if (!cued && !match[2] && !match[4]) continue;
+      min = min === null ? years : Math.min(min, years);
+    }
   }
   return min;
 }

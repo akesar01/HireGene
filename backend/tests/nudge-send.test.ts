@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { emails } = vi.hoisted(() => ({ emails: {} as Record<string, string> }));
+const { emails, clerkLookup } = vi.hoisted(() => {
+  const emails = {} as Record<string, string>;
+  const clerkLookup = async (ids: string[]) =>
+    new Map(ids.filter((id) => emails[id]).map((id) => [id, { userId: id, email: emails[id], firstName: null }]));
+  return { emails, clerkLookup };
+});
 
 vi.mock("../src/lib/prisma", async () => {
   const { createFakePrisma } = await import("./helpers/fake-prisma");
@@ -11,17 +16,14 @@ vi.mock("../src/lib/mongo", async () => {
   const profiles = createFakeProfiles([]);
   return { getProfilesCollection: async () => profiles, getDb: async () => null };
 });
-vi.mock("../src/lib/clerk-users", () => ({
-  fetchClerkUsers: vi.fn(async (ids: string[]) =>
-    new Map(ids.filter((id) => emails[id]).map((id) => [id, { userId: id, email: emails[id], firstName: null }])),
-  ),
-}));
+vi.mock("../src/lib/clerk-users", () => ({ fetchClerkUsers: vi.fn(clerkLookup) }));
 vi.mock("@vercel/functions", () => ({ waitUntil: vi.fn() }));
 
 import { prisma } from "../src/lib/prisma";
 import { getProfilesCollection } from "../src/lib/mongo";
+import { fetchClerkUsers } from "../src/lib/clerk-users";
 import type { EmailProvider, OutgoingEmail } from "../src/lib/email";
-import { isoWeekKey, runCampaign, scheduledCampaignFor } from "../src/lib/nudge-send";
+import { isoWeekKey, runCampaign, scheduledCampaignFor, sendTestNudge, type RunCampaignResult } from "../src/lib/nudge-send";
 
 const db = prisma as unknown as ReturnType<typeof import("./helpers/fake-prisma").createFakePrisma>;
 const NOW = new Date("2026-09-28T02:30:00Z"); // a Monday
@@ -141,6 +143,35 @@ describe("runCampaign", () => {
     expect(await db.nudgeSend.count({})).toBe(1);
   });
 
+  it("never double-sends when a second run of the same campaign overlaps with this one", async () => {
+    await seedProfiles(["user_a"]);
+    emails.user_a = "a@example.com";
+    const campaign = await createCampaign();
+    const provider = new RecordingProvider(false);
+
+    // The overlapping run starts after this run has listed its recipients but
+    // before it has written its rows, and finishes first.
+    const overlapping: RunCampaignResult[] = [];
+    vi.mocked(fetchClerkUsers).mockImplementationOnce(async (ids) => {
+      overlapping.push(await runCampaign({ campaignId: campaign.id, provider, now: NOW }));
+      return clerkLookup(ids);
+    });
+
+    const late = await runCampaign({ campaignId: campaign.id, provider, now: NOW });
+    const [early] = overlapping;
+
+    expect(early.sent).toBe(1);
+    expect(late.sent).toBe(0);
+    expect(late.alreadyClaimed).toBe(1);
+    expect(late.failed).toBe(0);
+    expect(late.completed).toBe(true);
+    expect(provider.sent.map((e) => e.to)).toEqual(["a@example.com"]);
+    const rows = await db.nudgeSend.findMany({});
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).toBe("sent");
+    expect((await db.campaign.findUnique({ where: { id: campaign.id } }))!.status).toBe("completed");
+  });
+
   it("skips a user with zero qualifying jobs instead of sending an empty email", async () => {
     await seedProfiles(["user_a"]);
     emails.user_a = "a@example.com";
@@ -257,6 +288,28 @@ describe("runCampaign", () => {
     const row = (await db.nudgeSend.findMany({}))[0];
     expect(row.error).toBe("no Clerk email");
     expect(row.email).toBe("");
+  });
+});
+
+describe("sendTestNudge", () => {
+  it("mails the typed address with a [TEST] subject, no unsubscribe headers and an inert footer, and records nothing", async () => {
+    await seedProfiles(["user_a"]);
+    emails.user_a = "a@example.com";
+    const provider = new RecordingProvider(true);
+
+    const result = await sendTestNudge({ to: "captain@example.com", userId: "user_a", provider, now: NOW });
+
+    expect(result.ok).toBe(true);
+    expect(result.subject).toMatch(/^\[TEST\] 5 jobs that match your resume/);
+    expect(provider.sent).toHaveLength(1);
+    const email = provider.sent[0];
+    expect(email.to).toBe("captain@example.com");
+    expect(email.headers).toBeUndefined();
+    for (const out of [email.html, email.text]) {
+      expect(out).toContain("unsubscribe disabled in test sends");
+      expect(out).not.toContain("/unsubscribe?t=");
+    }
+    expect(await db.nudgeSend.count({})).toBe(0);
   });
 });
 

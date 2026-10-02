@@ -201,6 +201,8 @@ export function buildNudge(options: {
   sinceCreatedAt: Date | null;
   now: Date;
   env?: NodeJS.ProcessEnv;
+  /** Render with an inert unsubscribe footer and no List-Unsubscribe headers. */
+  testSend?: boolean;
 }): BuiltNudge | null {
   const env = options.env ?? process.env;
   const limit = options.variant?.jobCount ?? options.campaign.jobCount ?? DEFAULT_NUDGE_JOB_COUNT;
@@ -216,7 +218,7 @@ export function buildNudge(options: {
   if (selection.picks.length === 0) return null;
 
   const site = frontendUrl(env);
-  const unsubscribeUrl = unsubscribePageUrl(options.pref, env);
+  const unsubscribeUrl = options.testSend ? null : unsubscribePageUrl(options.pref, env);
   const rendered = renderNudgeEmail({
     recipientName: options.recipient.firstName ?? options.profile.name?.split(/\s+/)[0] ?? null,
     jobs: selection.picks,
@@ -239,7 +241,7 @@ export function buildNudge(options: {
       subject: rendered.subject,
       html: rendered.html,
       text: rendered.text,
-      headers: listUnsubscribeHeaders(unsubscribeApiUrl(options.pref, env)),
+      ...(options.testSend ? {} : { headers: listUnsubscribeHeaders(unsubscribeApiUrl(options.pref, env)) }),
       tags: [{ name: "campaign", value: options.campaign.key.replace(/[^a-zA-Z0-9_-]/g, "_") }],
     },
   };
@@ -333,9 +335,22 @@ export interface RunCampaignResult {
   holdout: number;
   failed: number;
   inactive: number;
+  /** Recipients another run of this campaign claimed first; nothing was sent to them here. */
+  alreadyClaimed: number;
   remaining: number;
   exhaustedBudget: boolean;
   completed: boolean;
+}
+
+/** Insert this run's rows and return the ids that landed; a row that lost the (campaignId, userId) index to a concurrent run is absent. */
+async function claimSendRows(rows: Prisma.NudgeSendCreateManyInput[]): Promise<Set<string>> {
+  if (rows.length === 0) return new Set();
+  await prisma.nudgeSend.createMany({ data: rows, skipDuplicates: true });
+  const inserted = await prisma.nudgeSend.findMany({
+    where: { id: { in: rows.map((r) => r.id) } },
+    select: { id: true },
+  });
+  return new Set(inserted.map((r) => r.id));
 }
 
 export async function runCampaign(options: RunCampaignOptions): Promise<RunCampaignResult> {
@@ -363,6 +378,7 @@ export async function runCampaign(options: RunCampaignOptions): Promise<RunCampa
     holdout: 0,
     failed: 0,
     inactive: 0,
+    alreadyClaimed: 0,
     remaining: 0,
     exhaustedBudget: false,
     completed: campaign.status === "completed",
@@ -402,7 +418,7 @@ export async function runCampaign(options: RunCampaignOptions): Promise<RunCampa
     ]);
 
     const rows: Prisma.NudgeSendCreateManyInput[] = [];
-    const outgoing: { row: Prisma.NudgeSendCreateManyInput; email: OutgoingEmail; pref: EmailPreference }[] = [];
+    const outgoing = new Map<string, OutgoingEmail>();
 
     for (const userId of activeIds) {
       const pref = prefs.get(userId)!;
@@ -420,17 +436,14 @@ export async function runCampaign(options: RunCampaignOptions): Promise<RunCampa
 
       if (variant?.isHoldout) {
         rows.push({ ...base, status: "holdout" });
-        result.holdout += 1;
         continue;
       }
       if (!clerk?.email) {
         rows.push({ ...base, status: "failed", error: "no Clerk email" });
-        result.failed += 1;
         continue;
       }
       if (!profile) {
         rows.push({ ...base, status: "failed", error: "no resume profile" });
-        result.failed += 1;
         continue;
       }
 
@@ -450,40 +463,44 @@ export async function runCampaign(options: RunCampaignOptions): Promise<RunCampa
       });
       if (!built) {
         rows.push({ ...base, status: "skipped" });
-        result.skipped += 1;
         continue;
       }
-      const row: Prisma.NudgeSendCreateManyInput = {
-        ...base,
-        status: "queued",
-        jobIds: built.picks.map((j) => j.id),
-        subject: built.rendered.subject,
-      };
-      rows.push(row);
-      outgoing.push({ row, email: built.email, pref });
+      rows.push({ ...base, status: "queued", jobIds: built.picks.map((j) => j.id), subject: built.rendered.subject });
+      outgoing.set(base.id, built.email);
     }
 
-    if (rows.length > 0) {
-      await prisma.nudgeSend.createMany({ data: rows, skipDuplicates: true });
+    const claimed = await claimSendRows(rows);
+    const toSend: { id: string; userId: string; email: OutgoingEmail }[] = [];
+    for (const row of rows) {
+      if (!claimed.has(row.id)) {
+        result.alreadyClaimed += 1;
+      } else if (row.status === "holdout") {
+        result.holdout += 1;
+      } else if (row.status === "failed") {
+        result.failed += 1;
+      } else if (row.status === "skipped") {
+        result.skipped += 1;
+      } else {
+        toSend.push({ id: row.id, userId: row.userId, email: outgoing.get(row.id)! });
+      }
     }
 
-    if (outgoing.length > 0) {
-      const batch = await provider.sendBatch(outgoing.map((o) => o.email));
+    if (toSend.length > 0) {
+      const batch = await provider.sendBatch(toSend.map((o) => o.email));
       const sentAt = new Date();
       await Promise.all(
-        outgoing.map(async (o, i) => {
-          const id = o.row.id as string;
+        toSend.map(async (o, i) => {
           if (!batch.ok) {
             result.failed += 1;
             await prisma.nudgeSend.update({
-              where: { id },
+              where: { id: o.id },
               data: { status: "failed", error: (batch.error ?? "provider error").slice(0, 500) },
             });
             return;
           }
           result.sent += 1;
           await prisma.nudgeSend.update({
-            where: { id },
+            where: { id: o.id },
             data: {
               status: batch.dryRun ? "dry_run" : "sent",
               providerMessageId: batch.ids[i] ?? null,
@@ -491,7 +508,7 @@ export async function runCampaign(options: RunCampaignOptions): Promise<RunCampa
             },
           });
           await prisma.emailPreference.update({
-            where: { userId: o.row.userId },
+            where: { userId: o.userId },
             data: { lastSentAt: sentAt, email: o.email.to },
           });
         }),
@@ -553,6 +570,7 @@ export async function previewNudgeForUser(options: {
   variantId?: number | null;
   now?: Date;
   env?: NodeJS.ProcessEnv;
+  testSend?: boolean;
 }): Promise<PreviewResult> {
   const env = options.env ?? process.env;
   const now = options.now ?? new Date();
@@ -607,6 +625,7 @@ export async function previewNudgeForUser(options: {
     sinceCreatedAt: past?.lastSentAt ?? null,
     now,
     env,
+    testSend: options.testSend,
   });
   if (!built) return { ...base, reason: "no qualifying jobs: this user would be skipped" };
   return { ...base, rendered: built.rendered, picks: built.picks, poolSize: built.poolSize };
@@ -617,22 +636,21 @@ export async function sendTestNudge(options: {
   userId: string;
   campaignId?: number | null;
   variantId?: number | null;
+  now?: Date;
   env?: NodeJS.ProcessEnv;
   provider?: EmailProvider;
 }): Promise<{ ok: boolean; dryRun: boolean; providerMessageId: string | null; error?: string; subject?: string }> {
   const env = options.env ?? process.env;
   const provider = options.provider ?? createEmailProvider(env);
-  const preview = await previewNudgeForUser({ ...options, env });
+  const preview = await previewNudgeForUser({ ...options, env, testSend: true });
   if (!preview.rendered) {
     return { ok: false, dryRun: provider.dryRun, providerMessageId: null, error: preview.reason ?? "nothing to send" };
   }
-  const pref = await getOrCreatePreference(options.userId);
   const email: OutgoingEmail = {
     to: options.to,
     subject: `[TEST] ${preview.rendered.subject}`,
     html: preview.rendered.html,
     text: preview.rendered.text,
-    headers: listUnsubscribeHeaders(unsubscribeApiUrl(pref, env)),
     tags: [{ name: "campaign", value: "test" }],
   };
   const batch = await provider.sendBatch([email]);

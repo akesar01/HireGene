@@ -80,6 +80,15 @@ describe("renderNudgeEmail", () => {
     expect(text).toContain("Unsubscribe in one click: https://skiptheboard.in/unsubscribe?t=TOKEN");
   });
 
+  it("renders an inert footer with no unsubscribe link when no unsubscribe URL is given", () => {
+    const { html, text } = renderNudgeEmail({ ...input, unsubscribeUrl: null });
+    for (const out of [html, text]) {
+      expect(out).toContain("unsubscribe disabled in test sends");
+      expect(out).not.toContain("/unsubscribe");
+    }
+    expect(html).toContain("https://skiptheboard.in/profile#email");
+  });
+
   it("escapes HTML in job content and uses the variant intro", () => {
     const { html, text } = renderNudgeEmail({ ...input, intro: "Hand-picked for {name}." });
     expect(html).toContain("&lt;used&gt;");

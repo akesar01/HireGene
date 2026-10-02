@@ -89,6 +89,7 @@ export default function ExperimentsPanel({ getToken }: { getToken: () => Promise
       const result = await adminApi.sendNow(t, campaign.id);
       setNotice(
         `${result.dryRun ? "Dry run" : "Run"} ${result.campaignKey}: ${result.sent} emailed, ${result.holdout} holdout, ${result.skipped} skipped, ${result.failed} failed` +
+          (result.alreadyClaimed > 0 ? `, ${result.alreadyClaimed} already handled by another run` : "") +
           (result.remaining > 0 ? `; ${result.remaining} continue in the background.` : "."),
       );
       await load();
