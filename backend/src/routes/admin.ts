@@ -3,17 +3,38 @@ import { prisma } from "../lib/prisma.js";
 import { scrapeRecruiter } from "../lib/apify.js";
 import { JOB_EXPIRY_DAYS } from "../lib/config.js";
 import { expiredJobWhere } from "../lib/job-expiry.js";
+import { decideAdminAuth } from "../lib/admin-auth.js";
+import nudgesAdmin from "./admin-nudges.js";
+import statsAdmin from "./admin-stats.js";
 
-const admin = new Hono();
+type Variables = {
+  userId: string | null;
+  adminVia: "secret" | "clerk";
+};
 
-// Auth middleware — require ADMIN_SECRET
+const admin = new Hono<{ Variables: Variables }>();
+
+// Auth middleware: ADMIN_SECRET bearer (scripts) or a Clerk user listed in
+// ADMIN_USER_IDS / ADMIN_EMAILS (the dashboard). Never ship ADMIN_SECRET to a browser.
 admin.use("*", async (c, next) => {
-  const auth = c.req.header("Authorization");
-  if (!auth || auth !== `Bearer ${process.env.ADMIN_SECRET}`) {
-    return c.json({ error: "Unauthorized" }, 401);
+  const decision = await decideAdminAuth({
+    authHeader: c.req.header("Authorization"),
+    userId: c.get("userId"),
+  });
+  if (!decision.ok) {
+    return c.json({ error: decision.error }, decision.status);
   }
+  c.set("adminVia", decision.via);
   await next();
 });
+
+// GET /api/admin/whoami — lets the dashboard confirm access before rendering
+admin.get("/whoami", (c) => {
+  return c.json({ ok: true, via: c.get("adminVia"), userId: c.get("userId") });
+});
+
+admin.route("/nudges", nudgesAdmin);
+admin.route("/stats", statsAdmin);
 
 // POST /api/admin/recruiter — add recruiter
 admin.post("/recruiter", async (c) => {

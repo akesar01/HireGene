@@ -247,3 +247,163 @@ model JobApplication {
   @@index([userId])
   @@map("job_applications")
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// EMAIL NUDGES (match-based job emails to signed-in users)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+enum EmailFrequency {
+  weekly
+  daily
+}
+
+// Per-user email preferences. A user with a resume profile and no row is
+// treated as subscribed weekly (the privacy page states this default).
+model EmailPreference {
+  id                 Int            @id @default(autoincrement())
+  userId             String         @unique @map("user_id") // Clerk user id
+  email              String?        // Clerk primary email, cached at last send
+  subscribed         Boolean        @default(true)
+  frequency          EmailFrequency @default(weekly)
+  pausedUntil        DateTime?      @map("paused_until")
+  unsubscribedAt     DateTime?      @map("unsubscribed_at")
+  unsubscribeReason  String?        @map("unsubscribe_reason") // user | bounce | complaint | admin
+  unsubscribeToken   String         @unique @map("unsubscribe_token")
+  lastSentAt         DateTime?      @map("last_sent_at")
+  createdAt          DateTime       @default(now()) @map("created_at")
+  updatedAt          DateTime       @updatedAt @map("updated_at")
+
+  @@index([subscribed, frequency])
+  @@map("email_preferences")
+}
+
+enum CampaignKind {
+  weekly
+  daily
+  manual
+  experiment
+}
+
+enum CampaignStatus {
+  draft
+  running
+  completed
+}
+
+model Campaign {
+  id          Int            @id @default(autoincrement())
+  key         String         @unique // weekly-2026-W40, daily-2026-10-02, manual-<ts>, exp-<slug>
+  name        String
+  kind        CampaignKind
+  status      CampaignStatus @default(draft)
+  jobCount    Int            @default(5) @map("job_count")
+  createdBy   String?        @map("created_by") // admin user id or "cron"
+  startedAt   DateTime?      @map("started_at")
+  completedAt DateTime?      @map("completed_at")
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  variants    CampaignVariant[]
+  sends       NudgeSend[]
+
+  @@index([status])
+  @@map("campaigns")
+}
+
+// Experiment arms. Weights are percentages; a holdout arm receives nothing.
+model CampaignVariant {
+  id         Int      @id @default(autoincrement())
+  campaignId Int      @map("campaign_id")
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  key        String   // "A", "B", "control"
+  name       String
+  weight     Int      // 0-100, all weights in a campaign sum to 100
+  isHoldout  Boolean  @default(false) @map("is_holdout")
+  subject    String?  // supports {count} {companies} {name}
+  intro      String?
+  jobCount   Int?     @map("job_count")
+
+  sends      NudgeSend[]
+
+  @@unique([campaignId, key])
+  @@map("campaign_variants")
+}
+
+enum SendStatus {
+  queued     // row written, provider not yet called
+  dry_run    // rendered and recorded; no RESEND_API_KEY
+  sent       // accepted by the provider
+  delivered
+  bounced
+  complained
+  failed
+  skipped    // zero qualifying jobs
+  holdout    // control arm, nothing sent
+}
+
+// One row per recipient per campaign. The id is the public /go/<sendId> key.
+model NudgeSend {
+  id                String          @id // app-generated UUID
+  campaignId        Int             @map("campaign_id")
+  campaign          Campaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  variantId         Int?            @map("variant_id")
+  variant           CampaignVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  userId            String          @map("user_id")
+  email             String
+  status            SendStatus
+  providerMessageId String?         @unique @map("provider_message_id")
+  jobIds            Int[]           @map("job_ids")
+  subject           String?
+  error             String?
+  sentAt            DateTime?       @map("sent_at")
+  deliveredAt       DateTime?       @map("delivered_at")
+  openedAt          DateTime?       @map("opened_at")
+  clickedAt         DateTime?       @map("clicked_at")
+  bouncedAt         DateTime?       @map("bounced_at")
+  complainedAt      DateTime?       @map("complained_at")
+  unsubscribedAt    DateTime?       @map("unsubscribed_at")
+  createdAt         DateTime        @default(now()) @map("created_at")
+
+  clicks            NudgeClick[]
+
+  @@unique([campaignId, userId]) // idempotent per user per campaign
+  @@index([userId])
+  @@index([status])
+  @@map("nudge_sends")
+}
+
+// A click from the /go redirect or a provider click webhook.
+model NudgeClick {
+  id        Int       @id @default(autoincrement())
+  sendId    String    @map("send_id")
+  send      NudgeSend @relation(fields: [sendId], references: [id], onDelete: Cascade)
+  jobId     Int?      @map("job_id")
+  source    String    // redirect | webhook
+  url       String?
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([sendId])
+  @@index([jobId])
+  @@map("nudge_clicks")
+}
+
+// Raw provider webhook events, keyed by the Svix message id for dedupe.
+model EmailEvent {
+  id              Int      @id @default(autoincrement())
+  providerEventId String   @unique @map("provider_event_id")
+  type            String
+  messageId       String?  @map("message_id")
+  payload         Json
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([messageId])
+  @@map("email_events")
+}
+
+// Small key/value store for operator switches (e.g. nudges.schedule_paused).
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("app_settings")
+}
