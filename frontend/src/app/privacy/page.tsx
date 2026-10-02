@@ -6,15 +6,16 @@ import Header from "@/components/Header";
 export const metadata: Metadata = {
   title: "Privacy Policy",
   description:
-    "SkipTheBoard privacy policy. We collect minimal data — votes by IP address and recruiter submissions. No accounts, no passwords, no payment information.",
+    "What SkipTheBoard stores (account, resume, email preferences, votes), who processes it, and how to unsubscribe or delete your data.",
   alternates: { canonical: "/privacy" },
   openGraph: {
     title: "Privacy Policy | SkipTheBoard",
-    description:
-      "We collect minimal data. No accounts, no passwords, no payments. Here's exactly what we track and why.",
+    description: "What we store, who processes it, and how to unsubscribe or delete your data.",
     url: "https://skiptheboard.in/privacy",
   },
 };
+
+const CONTACT = "hello@skiptheboard.in";
 
 export default function PrivacyPage() {
   return (
@@ -23,150 +24,116 @@ export default function PrivacyPage() {
 
       <article className="max-w-3xl mx-auto px-6 py-10">
         <h1 className="text-3xl font-bold text-foreground tracking-tight">Privacy Policy</h1>
-        <p className="mt-2 text-xs text-muted-light">Last updated: June 2025</p>
+        <p className="mt-2 text-xs text-muted-light">Last updated: October 2026</p>
 
         <p className="mt-6 text-sm text-muted leading-relaxed">
-          SkipTheBoard is designed to collect as little data as possible. We don&apos;t have user
-          accounts, we don&apos;t ask for your name or email, and we don&apos;t process payments.
-          Here&apos;s exactly what we collect and why.
+          SkipTheBoard shows hiring posts that founders, managers and recruiters publish on LinkedIn and X.
+          You can browse without an account. If you sign in and upload a resume, we store that data to rank the
+          feed for you and to email you matching jobs. This page lists exactly what we keep, why, who processes
+          it, and how to opt out or delete it.
         </p>
 
-        {/* What we collect */}
-        <h2 className="mt-10 text-xl font-bold text-foreground">What we collect</h2>
+        <h2 className="mt-10 text-xl font-bold text-foreground">What we store</h2>
 
-        <h3 className="mt-6 text-sm font-bold text-foreground">Votes (upvotes &amp; downvotes)</h3>
+        <h3 className="mt-6 text-sm font-bold text-foreground">Your account</h3>
         <p className="mt-2 text-sm text-muted leading-relaxed">
-          When you upvote or downvote a job post, we record your IP address to prevent duplicate
-          voting. We store: the job ID, your IP address, and the vote direction (up or down).
-          We do <strong className="text-foreground">not</strong> link votes to any identity.
+          Sign-in is handled by Clerk. Clerk stores your name, email address and sign-in method and sets the
+          cookies needed to keep you signed in. We read your user id and your primary email from Clerk. We never
+          see your password.
         </p>
 
-        <h3 className="mt-6 text-sm font-bold text-foreground">Recruiter submissions</h3>
+        <h3 className="mt-6 text-sm font-bold text-foreground">Your resume</h3>
         <p className="mt-2 text-sm text-muted leading-relaxed">
-          When you submit a hiring manager for review, we store: the hiring manager&apos;s name,
-          their LinkedIn URL, their company and role (if provided), your note (if provided), and
-          your IP address (to prevent spam). We do <strong className="text-foreground">not</strong>{" "}
-          collect your name, email, or any personal information.
+          When you upload a resume we extract its text and parse it with an AI model (Groq) into contact details,
+          experience, education, skills and a short filter summary (role, seniority, work mode, stack). We store the
+          parsed data and the filter summary, not the file itself. The parsed data powers your match scores, the
+          Draft DM feature and a shareable resume page at a private link that only people you give it to can open.
+          Re-uploading replaces the stored data.
+        </p>
+
+        <h3 className="mt-6 text-sm font-bold text-foreground">Email preferences and sends</h3>
+        <p className="mt-2 text-sm text-muted leading-relaxed">
+          If you have signed in and uploaded a resume, we email you the jobs on the board that best match it,
+          weekly by default. You can switch to daily, pause, or turn it off on your profile at any time, and every
+          email has a one-click unsubscribe link that needs no login. We store your choice (on or off, frequency,
+          pause date), when each email was sent and which jobs it contained, and whether it was delivered, opened
+          or clicked. Links in the email pass through our own redirect so we can count clicks; we also receive
+          delivery, bounce and complaint reports from the email provider. A hard bounce or a spam complaint turns
+          emails off automatically. We never email the address printed in your resume, only the address on your
+          account.
+        </p>
+
+        <h3 className="mt-6 text-sm font-bold text-foreground">Applied and votes</h3>
+        <p className="mt-2 text-sm text-muted leading-relaxed">
+          Marking a job as applied stores the job id against your account. Upvotes and downvotes store the job id,
+          the vote direction and your IP address, which we use only to stop duplicate voting.
+        </p>
+
+        <h3 className="mt-6 text-sm font-bold text-foreground">Hiring-manager submissions</h3>
+        <p className="mt-2 text-sm text-muted leading-relaxed">
+          When you suggest a hiring manager we store the details you enter and your IP address to stop spam.
+        </p>
+
+        <h3 className="mt-6 text-sm font-bold text-foreground">Payments</h3>
+        <p className="mt-2 text-sm text-muted leading-relaxed">
+          If you buy a plan, Stripe handles the payment. We store only your plan status, never card details.
         </p>
 
         <h3 className="mt-6 text-sm font-bold text-foreground">Analytics</h3>
         <p className="mt-2 text-sm text-muted leading-relaxed">
-          We use Google Analytics 4 to understand aggregate traffic patterns &mdash; page views,
-          traffic sources, and general location (country/city level). GA4 uses cookieless
-          measurement by default. We do not track individual users across sessions.
+          We use Google Analytics 4 for aggregate traffic reporting (page views, referrers, country). Google may set
+          analytics cookies in your browser for this. We do not sell or share data with advertisers.
         </p>
 
-        {/* What we don't collect */}
-        <h2 className="mt-10 text-xl font-bold text-foreground">What we DON&apos;T collect</h2>
+        <h2 className="mt-10 text-xl font-bold text-foreground">Who processes it</h2>
         <ul className="mt-4 space-y-2 text-sm text-muted leading-relaxed">
-          <li className="flex items-start gap-2">
-            <span className="text-accent shrink-0 mt-0.5">&#10005;</span>
-            <span><strong className="text-foreground">No accounts.</strong> We don&apos;t have user registration, login, or profiles.</span>
+          <li><strong className="text-foreground">Clerk</strong> for sign-in and account data.</li>
+          <li><strong className="text-foreground">Resend</strong> sends our emails and reports delivery, bounces, opens, clicks and complaints back to us.</li>
+          <li><strong className="text-foreground">Groq</strong> parses resume text and job posts. Text is sent for processing and is not used by us to train models.</li>
+          <li><strong className="text-foreground">Stripe</strong> for payments.</li>
+          <li><strong className="text-foreground">Google Analytics</strong> for aggregate traffic.</li>
+          <li><strong className="text-foreground">Vercel</strong>, plus hosted PostgreSQL and MongoDB, run the site and store the data above.</li>
+        </ul>
+
+        <h2 className="mt-10 text-xl font-bold text-foreground">Retention</h2>
+        <p className="mt-2 text-sm text-muted leading-relaxed">
+          Job posts expire and are deleted after {JOB_EXPIRY_DAYS} days. Account, resume and email data stay until
+          you delete them. Send and unsubscribe records are kept for one year so we can prove when you opted out.
+        </p>
+
+        <h2 className="mt-10 text-xl font-bold text-foreground">Your choices</h2>
+        <ul className="mt-4 space-y-2 text-sm text-muted leading-relaxed">
+          <li>
+            <strong className="text-foreground">Stop emails:</strong> click &ldquo;Unsubscribe in one click&rdquo; in any email, or turn the switch off on your{" "}
+            <Link href="/profile#email" className="text-accent hover:underline">profile</Link>. It takes effect immediately.
           </li>
-          <li className="flex items-start gap-2">
-            <span className="text-accent shrink-0 mt-0.5">&#10005;</span>
-            <span><strong className="text-foreground">No email addresses.</strong> We don&apos;t ask for your email on the submit form.</span>
+          <li>
+            <strong className="text-foreground">Delete your data:</strong> email <a href={`mailto:${CONTACT}`} className="text-accent hover:underline">{CONTACT}</a> from your account address. We delete your resume data, preferences, applied marks and send history, and remove your Clerk account, within 30 days.
           </li>
-          <li className="flex items-start gap-2">
-            <span className="text-accent shrink-0 mt-0.5">&#10005;</span>
-            <span><strong className="text-foreground">No payment information.</strong> The site is completely free. We don&apos;t process payments.</span>
+          <li>
+            <strong className="text-foreground">See your data:</strong> your profile page shows everything we parsed from your resume. Ask at the same address for a full copy.
           </li>
-          <li className="flex items-start gap-2">
-            <span className="text-accent shrink-0 mt-0.5">&#10005;</span>
-            <span><strong className="text-foreground">No tracking cookies.</strong> GA4 uses cookieless measurement. No cross-site tracking.</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-accent shrink-0 mt-0.5">&#10005;</span>
-            <span><strong className="text-foreground">No personal information.</strong> We don&apos;t sell or share data with third parties.</span>
+          <li>
+            <strong className="text-foreground">Complain:</strong> if we do not resolve a concern, you may approach the Data Protection Board of India under the Digital Personal Data Protection Act, 2023.
           </li>
         </ul>
 
-        {/* How data is used */}
-        <h2 className="mt-10 text-xl font-bold text-foreground">How your data is used</h2>
-        <ul className="mt-4 space-y-2 text-sm text-muted leading-relaxed">
-          <li className="flex items-start gap-2">
-            <span className="text-accent shrink-0 mt-0.5">&#10003;</span>
-            <span><strong className="text-foreground">Votes</strong> are used to rank job posts in the community feed.</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-accent shrink-0 mt-0.5">&#10003;</span>
-            <span><strong className="text-foreground">Submissions</strong> are reviewed by our team. Approved submissions become tracked recruiters whose public posts are captured.</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-accent shrink-0 mt-0.5">&#10003;</span>
-            <span><strong className="text-foreground">Analytics</strong> help us understand which job categories are most popular and where our visitors come from.</span>
-          </li>
-        </ul>
-
-        {/* Data retention */}
-        <h2 className="mt-10 text-xl font-bold text-foreground">Data retention</h2>
-        <ul className="mt-4 space-y-2 text-sm text-muted leading-relaxed">
-          <li className="flex items-start gap-2">
-            <span className="text-muted-light shrink-0 mt-0.5">&bull;</span>
-            <span><strong className="text-foreground">Job posts</strong> auto-expire after {JOB_EXPIRY_DAYS} days and are removed from the feed.</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-muted-light shrink-0 mt-0.5">&bull;</span>
-            <span><strong className="text-foreground">Votes</strong> are retained as long as the associated job post exists. When a job is deleted, its votes are deleted too.</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-muted-light shrink-0 mt-0.5">&bull;</span>
-            <span><strong className="text-foreground">Submissions</strong> are retained after review (approved or rejected) for record-keeping.</span>
-          </li>
-        </ul>
-
-        {/* Third-party services */}
-        <h2 className="mt-10 text-xl font-bold text-foreground">Third-party services</h2>
-        <ul className="mt-4 space-y-2 text-sm text-muted leading-relaxed">
-          <li className="flex items-start gap-2">
-            <span className="text-muted-light shrink-0 mt-0.5">&bull;</span>
-            <span><strong className="text-foreground">Google Analytics 4</strong> &mdash; Privacy-friendly, cookieless traffic analytics. <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">Google&apos;s Privacy Policy</a>.</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-muted-light shrink-0 mt-0.5">&bull;</span>
-            <span><strong className="text-foreground">Apify</strong> &mdash; Used to scrape public LinkedIn and X posts. We only collect publicly available hiring posts.</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-muted-light shrink-0 mt-0.5">&bull;</span>
-            <span><strong className="text-foreground">Vercel</strong> &mdash; Hosting provider. Standard server logs are retained by Vercel per their policies.</span>
-          </li>
-        </ul>
-
-        {/* Newsletter */}
-        <h2 className="mt-10 text-xl font-bold text-foreground">Newsletter</h2>
-        <p className="mt-4 text-sm text-muted leading-relaxed">
-          If we offer a newsletter in the future, email collection will be handled by a third-party
-          provider (e.g. Substack) under their own privacy policy. Your email will never be stored
-          on our servers.
+        <h2 className="mt-10 text-xl font-bold text-foreground">Hiring posts</h2>
+        <p className="mt-2 text-sm text-muted leading-relaxed">
+          Posts in the feed are public LinkedIn and X posts and link back to the original. If you wrote a post and
+          want it removed, email <a href={`mailto:${CONTACT}`} className="text-accent hover:underline">{CONTACT}</a> with the link.
         </p>
 
-        {/* Your rights */}
-        <h2 className="mt-10 text-xl font-bold text-foreground">Your rights</h2>
-        <p className="mt-4 text-sm text-muted leading-relaxed">
-          Since we don&apos;t collect personal information tied to your identity, most data
-          protection rights (GDPR, CCPA) are limited. If you believe we have data about you and
-          would like it removed, contact us and we will review your request.
+        <h2 className="mt-10 text-xl font-bold text-foreground">Changes</h2>
+        <p className="mt-2 text-sm text-muted leading-relaxed">
+          We will update this page when what we collect changes, and change the date at the top.
         </p>
 
-        {/* Changes */}
-        <h2 className="mt-10 text-xl font-bold text-foreground">Changes to this policy</h2>
-        <p className="mt-4 text-sm text-muted leading-relaxed">
-          We may update this privacy policy as the service evolves. The &quot;Last updated&quot; date
-          at the top of this page reflects the most recent revision.
+        <p className="mt-10 text-xs text-muted-light">
+          Questions: <a href={`mailto:${CONTACT}`} className="hover:text-foreground">{CONTACT}</a> ·{" "}
+          <Link href="/terms" className="hover:text-foreground">Terms</Link> ·{" "}
+          <Link href="/" className="hover:text-foreground">Back to the feed</Link>
         </p>
-
-        <div className="mt-10 rounded-xl bg-card-bg border border-card-border p-5 shadow-card">
-          <p className="text-sm font-semibold text-foreground">Questions about privacy?</p>
-          <p className="mt-1 text-xs text-muted">
-            We&apos;re happy to clarify. Reach out and we&apos;ll respond.
-          </p>
-          <Link
-            href="/"
-            className="mt-3 inline-flex items-center gap-1.5 bg-accent text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-accent-hover transition-colors"
-          >
-            Back to feed &rarr;
-          </Link>
-        </div>
       </article>
     </div>
   );

@@ -98,7 +98,25 @@ npx vercel env add APIFY_MAX_CONCURRENT production
 # Value: 5
 npx vercel env add INGEST_ROLE_FAMILIES production
 # Optional. Value: engineering,ai_ml (default). Comma-separated RoleFamily values allowed into the feed.
+
+# Email nudges (see "Match-based email nudges" below)
+npx vercel env add RESEND_API_KEY production
+# Optional. Without it every send is a dry run: rendered and recorded, nothing leaves the server.
+npx vercel env add RESEND_WEBHOOK_SECRET production
+# Signing secret of the Resend webhook endpoint (starts with whsec_). Without it POST /api/email/webhook returns 503.
+npx vercel env add EMAIL_FROM production
+# Value: SkipTheBoard Jobs <jobs@mail.skiptheboard.in> (default when unset)
+npx vercel env add UNSUBSCRIBE_SECRET production
+# Random 32+ char string. Signs the one-click unsubscribe links; rotating it invalidates links in already-sent emails.
+npx vercel env add ADMIN_USER_IDS production
+# Comma-separated Clerk user ids allowed into /admin. Either this or ADMIN_EMAILS must list the captain.
+npx vercel env add ADMIN_EMAILS production
+# Comma-separated primary Clerk emails allowed into /admin (case-insensitive). Resolved through @clerk/backend.
+npx vercel env add FRONTEND_URL production
+# Value: https://skiptheboard.in — origin used in email links and the /go redirect fallback.
 ```
+
+`CLERK_SECRET_KEY` and `MONGODB_URI` are already required for sign-in and profiles; the nudges reuse them for recipient emails and resume profiles.
 
 **`CORS_ORIGIN`** must be a comma-separated list of allowed origins:
 
@@ -138,7 +156,7 @@ npm run dev
 
 ### Daily recruiter scrape
 
-`backend/vercel.json` registers a Vercel Cron that hits `GET /api/cron/scrape` every 15 minutes. Vercel sends `Authorization: Bearer $CRON_SECRET` when that env var is set.
+`backend/vercel.json` registers a Vercel Cron that hits `GET /api/cron/scrape` once a day at 04:00 UTC. Vercel sends `Authorization: Bearer $CRON_SECRET` when that env var is set.
 
 The endpoint starts at most 5 due recruiters per tick (Apify Free concurrent cap), then if more remain it waits 10 minutes and starts the next 5, until everyone due that day is scraped. Unfinished Apify runs stay `RUNNING` and are ingested on a later tick. Set `APIFY_WAIT_MS` (default 180000) if a manual admin scrape should wait longer in-request.
 
@@ -150,6 +168,34 @@ curl -X POST https://backend-umber-nu-43.vercel.app/api/cron/scrape \
 ```
 
 Use `?once=1` to scrape a single due recruiter and stop.
+
+### Match-based email nudges
+
+Signed-in users with a resume profile get an email with the jobs on the board that best match their resume. Everything lives behind `backend/src/lib/email.ts` (provider), `nudge-select.ts` (pure ranking, senior override, gates), `nudge-render.ts` (plain HTML + text template) and `nudge-send.ts` (campaign runner). The send path never calls an LLM.
+
+**Crons (`backend/vercel.json`, 3 total, all daily or slower as Vercel Hobby requires):**
+
+| Path | Schedule (UTC) | What it does |
+|------|----------------|--------------|
+| `/api/cron/expire-jobs` | `0 3 * * *` | Delete jobs older than `JOB_EXPIRY_DAYS`. |
+| `/api/cron/scrape` | `0 4 * * *` | Daily recruiter scrape (drains through GitHub Actions). |
+| `/api/cron/nudges` | `30 2 * * *` | 08:00 IST. On Mondays it creates and runs the weekly campaign for every subscribed user; on other days it runs a daily campaign only for users who chose daily. Hobby fires it within the hour. |
+
+A run processes recipients in pages of 100 (one Resend batch call each). If the 240 s budget (`NUDGE_BUDGET_MS`) runs out it POSTs itself `/api/cron/nudges?campaign=<id>` with `CRON_SECRET` via `waitUntil`, so a long send continues in a fresh invocation. The `(campaign, user)` unique index makes any retry safe. The admin "Pause schedule" switch stores `nudges.schedule_paused` in `app_settings`; a paused cron creates no campaign, while "Send now" from the dashboard still works.
+
+**Dry run.** With no `RESEND_API_KEY`, sends are rendered and recorded with status `dry_run` and the admin preview, test send and campaigns all work. Nothing is ever sent from tests.
+
+**Resend setup.**
+
+1. Domain `mail.skiptheboard.in` is added in Resend in region **ap-northeast-1 (Tokyo)**. Its DNS records are already in place. Because skiptheboard.in's nameservers are Vercel's (`ns1/ns2.vercel-dns.com`), any email DNS change goes into **Vercel → Domains → skiptheboard.in → DNS Records**, not GoDaddy. The records Resend requires are: a TXT at `resend._domainkey.mail` (DKIM), an MX plus a TXT at `send.mail` (SPF / return path), and a TXT at `_dmarc` (`v=DMARC1; p=none; rua=mailto:<reporting inbox>`, tighten to `p=quarantine` after a few clean weeks). Copy the exact values from the Resend domain page.
+2. Webhook: in Resend → Webhooks add `https://backend-umber-nu-43.vercel.app/api/email/webhook` with the events `email.delivered`, `email.opened`, `email.clicked`, `email.bounced`, `email.complained` (sent and delivery_delayed are accepted and ignored). Paste the endpoint's signing secret into `RESEND_WEBHOOK_SECRET` and redeploy. Signatures are verified with Svix; events are deduplicated by `svix-id`.
+3. Every email carries `List-Unsubscribe` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click` (RFC 8058) pointing at `POST /api/email/unsubscribe?t=<signed token>`, plus a footer link to `https://skiptheboard.in/unsubscribe?t=…`. Hard bounces and complaints unsubscribe the user automatically.
+
+**Click tracking.** Job links go to `https://skiptheboard.in/go/<sendId>/<jobId>`; the Next route forwards to the backend `GET /go/...` (rewrite in `vercel.json`), which logs a `nudge_clicks` row and 302s to the LinkedIn post. Site links carry `utm_source=nudge&utm_medium=email&utm_campaign=<campaign key>`.
+
+**Admin dashboard.** `https://skiptheboard.in/admin` renders only for Clerk users in `ADMIN_USER_IDS` / `ADMIN_EMAILS`; every `/api/admin/*` call is checked on the backend (the machine `ADMIN_SECRET` still works for curl and scripts, but is never sent to a browser). Tabs: Subscribers, Email performance, Jobs & site, Send controls (preview any user, test send, send now, pause/resume), Experiments (2+ variants with weights and an optional holdout, results side by side), Submissions, Hiring managers.
+
+**Migration.** `backend/prisma/migrations/20261002090000_add_email_nudges` adds `email_preferences`, `campaigns`, `campaign_variants`, `nudge_sends`, `nudge_clicks`, `email_events` and `app_settings`. Apply with `npx prisma migrate deploy` against production before the first send.
 
 ### Ingest quality gates
 
