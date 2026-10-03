@@ -13,11 +13,11 @@ import { createEmailProvider, EMAIL_BATCH_SIZE, listUnsubscribeHeaders, type Ema
 import { newUnsubscribeToken, signUnsubscribeToken } from "./email-tokens.js";
 import { activeJobWhere } from "./job-expiry.js";
 import { getProfilesCollection } from "./mongo.js";
-import { renderNudgeEmail, siteLink, type RenderedEmail } from "./nudge-render.js";
+import { renderNudgeEmail, siteLink, type JobSignals, type RenderedEmail } from "./nudge-render.js";
 import { DEFAULT_NUDGE_JOB_COUNT, selectJobsForUser, type NudgeJobInput, type RankedJob } from "./nudge-select.js";
 import { assignVariant, bucketFor } from "./nudge-variants.js";
 import { prisma } from "./prisma.js";
-import { backendUrl, contactEmail, frontendUrl } from "./site-urls.js";
+import { backendUrl, frontendUrl } from "./site-urls.js";
 
 export const SCHEDULE_PAUSED_KEY = "nudges.schedule_paused";
 export const DEFAULT_NUDGE_BUDGET_MS = 240_000;
@@ -145,6 +145,7 @@ export async function loadJobPool(now = new Date()): Promise<NudgeJobInput[]> {
       company: true,
       author: true,
       authorTitle: true,
+      authorAvatar: true,
       source: true,
       sourceUrl: true,
       roleFamily: true,
@@ -158,6 +159,35 @@ export async function loadJobPool(now = new Date()): Promise<NudgeJobInput[]> {
     },
   });
   return jobs.map((j) => ({ ...j, stack: j.stack as string[] }));
+}
+
+/**
+ * Recorded engagement per job for the email's momentum line: "Applied" rows,
+ * and distinct sends whose recipient clicked the job (the /go redirect and the
+ * provider click webhook can both log one click, so sends are de-duplicated).
+ */
+export async function loadJobSignals(jobIds: number[]): Promise<Map<number, JobSignals>> {
+  const result = new Map<number, JobSignals>();
+  if (jobIds.length === 0) return result;
+  const [applied, clicks] = await Promise.all([
+    prisma.jobApplication.groupBy({ by: ["jobId"], where: { jobId: { in: jobIds } }, _count: { _all: true } }),
+    prisma.nudgeClick.findMany({ where: { jobId: { in: jobIds } }, select: { jobId: true, sendId: true } }),
+  ]);
+  const entry = (jobId: number) => {
+    let signals = result.get(jobId);
+    if (!signals) result.set(jobId, (signals = { applied: 0, viewers: 0 }));
+    return signals;
+  };
+  for (const group of applied) entry(group.jobId).applied = group._count._all;
+  const viewers = new Map<number, Set<string>>();
+  for (const click of clicks) {
+    if (click.jobId === null) continue;
+    const sends = viewers.get(click.jobId) ?? new Set<string>();
+    sends.add(click.sendId);
+    viewers.set(click.jobId, sends);
+  }
+  for (const [jobId, sends] of viewers) entry(jobId).viewers = sends.size;
+  return result;
 }
 
 /** Jobs already emailed per user, and when they last got a nudge. */
@@ -200,6 +230,8 @@ export function buildNudge(options: {
   excludeJobIds: Iterable<number>;
   sinceCreatedAt: Date | null;
   now: Date;
+  /** Per-job counts for the momentum line; omitted means no count-based lines. */
+  signals?: ReadonlyMap<number, JobSignals>;
   env?: NodeJS.ProcessEnv;
   /** Render with an inert unsubscribe footer and no List-Unsubscribe headers. */
   testSend?: boolean;
@@ -229,7 +261,8 @@ export function buildNudge(options: {
     preferencesUrl: siteLink(site, "/profile", options.campaign.key, "preferences") + "#email",
     subjectTemplate: options.variant?.subject ?? null,
     intro: options.variant?.intro ?? null,
-    contactEmail: contactEmail(env),
+    signals: options.signals,
+    now: options.now,
   });
 
   return {
@@ -408,6 +441,7 @@ export async function runCampaign(options: RunCampaignOptions): Promise<RunCampa
 
   const variants = [...campaign.variants].sort((a, b) => a.id - b.id);
   const jobs = await loadJobPool(now);
+  const signals = await loadJobSignals(jobs.map((j) => j.id));
 
   let index = 0;
   while (index < todo.length) {
@@ -469,6 +503,7 @@ export async function runCampaign(options: RunCampaignOptions): Promise<RunCampa
         excludeJobIds: past?.jobIds ?? [],
         sinceCreatedAt: past?.lastSentAt ?? null,
         now,
+        signals,
         env,
       });
       if (!built) {
@@ -605,6 +640,7 @@ export async function previewNudgeForUser(options: {
     loadSendHistory([options.userId]),
     loadJobPool(now),
   ]);
+  const signals = await loadJobSignals(jobs.map((j) => j.id));
   const clerk = clerkUsers.get(options.userId) ?? { userId: options.userId, email: null, firstName: null };
   const profile = profiles.get(options.userId);
 
@@ -634,6 +670,7 @@ export async function previewNudgeForUser(options: {
     excludeJobIds: past?.jobIds ?? [],
     sinceCreatedAt: past?.lastSentAt ?? null,
     now,
+    signals,
     env,
     testSend: options.testSend,
   });

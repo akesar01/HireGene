@@ -173,6 +173,23 @@ Use `?once=1` to scrape a single due recruiter and stop.
 
 Signed-in users with a resume profile get an email with the jobs on the board that best match their resume. Everything lives behind `backend/src/lib/email.ts` (provider), `nudge-select.ts` (pure ranking, senior override, gates), `nudge-render.ts` (plain HTML + text template) and `nudge-send.ts` (campaign runner). The send path never calls an LLM.
 
+**The email.** Subject "4 new jobs that match you", preheader "Picked from posts by the people hiring" (experiment variants can override the subject and the top line). One column, 560px max, white, system fonts, the site accent `#ff5414`, table-based buttons for Gmail and Outlook, plus a plain-text part with the same content:
+
+```
+Hi Ankit, 4 jobs matched your resume this week.
+
+[photo]  SDE 1 · M2P Fintech
+         Srinivasarao · Hiring manager
+         SDE-1 level · In-office · posted 10 days ago
+         4 people applied via SkipTheBoard
+         [View post]                       -> /go/<sendId>/<jobId>
+...
+See all jobs on SkipTheBoard
+You get this because you uploaded your resume to SkipTheBoard. Unsubscribe · Email settings
+```
+
+The photo is `Job.authorAvatar`, 48px round. A missing URL, or a LinkedIn media URL whose `e=<unix seconds>` has passed at send time, renders a round initials badge instead. Each card has at most one accent "momentum" line, the first that is true: `N people applied via SkipTheBoard` (N >= 3 `job_applications` rows), `N people viewed this` (N >= 5 distinct sends with a `nudge_clicks` row for the job; the site records no other per-job clicks), `Posted today, early applicants get noticed` (under 24 h), `Posted N days ago, apply before it fills up` (2 to 6 days). Counts are printed as recorded. When the momentum line states the posting age, the meta line drops it. Rules and thresholds live in `momentumFor` in `nudge-render.ts`.
+
 **Crons (`backend/vercel.json`, 3 total, all daily or slower as Vercel Hobby requires):**
 
 | Path | Schedule (UTC) | What it does |

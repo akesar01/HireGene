@@ -11,6 +11,7 @@ export interface NudgeJobInput {
   company: string;
   author: string;
   authorTitle: string;
+  authorAvatar?: string | null;
   source: string;
   sourceUrl: string;
   roleFamily: string;
@@ -31,6 +32,7 @@ export interface RankedJob {
   company: string;
   author: string;
   authorTitle: string;
+  authorAvatar: string | null;
   sourceUrl: string;
   source: string;
   roleFamily: string;
@@ -254,6 +256,7 @@ export function selectJobsForUser(options: SelectOptions): SelectResult {
       company: gate.company,
       author: job.author,
       authorTitle: job.authorTitle,
+      authorAvatar: job.authorAvatar ?? null,
       source: job.source,
       sourceUrl: job.sourceUrl,
       roleFamily: job.roleFamily,

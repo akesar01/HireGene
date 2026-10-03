@@ -30,6 +30,7 @@ import {
   ensureScheduledCampaign,
   isSchedulePaused,
   isoWeekKey,
+  loadJobSignals,
   nextNudgeTick,
   runCampaign,
   scheduledCampaignFor,
@@ -126,7 +127,7 @@ describe("runCampaign", () => {
     for (const row of rows) {
       expect(row.status).toBe("dry_run");
       expect(row.jobIds).toHaveLength(5);
-      expect(row.subject).toContain("5 jobs that match your resume");
+      expect(row.subject).toBe("5 new jobs that match you");
       expect(row.providerMessageId).toBeNull();
     }
     const prefs = await db.emailPreference.findMany({});
@@ -251,7 +252,7 @@ describe("runCampaign", () => {
     expect(result.holdout).toBe(holdout.length);
     expect(provider.sent).toHaveLength(40 - holdout.length);
     expect(armA.every((r) => r.jobIds.length === 3 && /^\d+ matches for /.test(r.subject))).toBe(true);
-    expect(armB.every((r) => r.jobIds.length === 5 && r.subject.startsWith("5 jobs that match"))).toBe(true);
+    expect(armB.every((r) => r.jobIds.length === 5 && r.subject === "5 new jobs that match you")).toBe(true);
     expect(armA.every((r) => r.status === "sent" && r.providerMessageId)).toBe(true);
     for (const email of provider.sent) {
       expect(holdout.some((h) => h.email === email.to)).toBe(false);
@@ -313,7 +314,7 @@ describe("sendTestNudge", () => {
     const result = await sendTestNudge({ to: "captain@example.com", userId: "user_a", provider, now: NOW });
 
     expect(result.ok).toBe(true);
-    expect(result.subject).toMatch(/^\[TEST\] 5 jobs that match your resume/);
+    expect(result.subject).toMatch(/^\[TEST\] 5 new jobs that match you$/);
     expect(provider.sent).toHaveLength(1);
     const email = provider.sent[0];
     expect(email.to).toBe("captain@example.com");
@@ -323,6 +324,35 @@ describe("sendTestNudge", () => {
       expect(out).not.toContain("/unsubscribe?t=");
     }
     expect(await db.nudgeSend.count({})).toBe(0);
+  });
+});
+
+describe("loadJobSignals", () => {
+  it("counts applications and distinct clicking sends per job, so a redirect plus webhook click counts once", async () => {
+    for (const userId of ["u1", "u2", "u3"]) db.jobApplication.rows.push({ id: db.jobApplication.rows.length + 1, jobId: 1, userId });
+    db.nudgeClick.rows.push(
+      { id: 1, sendId: "s1", jobId: 2, source: "redirect" },
+      { id: 2, sendId: "s1", jobId: 2, source: "webhook" },
+      { id: 3, sendId: "s2", jobId: 2, source: "redirect" },
+      { id: 4, sendId: "s3", jobId: null, source: "webhook" },
+    );
+    const signals = await loadJobSignals([1, 2, 3]);
+    expect(signals.get(1)).toEqual({ applied: 3, viewers: 0 });
+    expect(signals.get(2)).toEqual({ applied: 0, viewers: 2 });
+    expect(signals.has(3)).toBe(false);
+  });
+
+  it("puts the applied count on the card in a preview send", async () => {
+    await seedProfiles(["user_a"]);
+    emails.user_a = "a@example.com";
+    for (const userId of ["u1", "u2", "u3", "u4"]) db.jobApplication.rows.push({ id: db.jobApplication.rows.length + 1, jobId: 1, userId });
+    const provider = new RecordingProvider(true);
+
+    await sendTestNudge({ to: "captain@example.com", userId: "user_a", provider, now: NOW });
+
+    const email = provider.sent[0];
+    expect(email.text).toContain("4 people applied via SkipTheBoard");
+    expect(email.html.match(/people applied via SkipTheBoard/g)).toHaveLength(1);
   });
 });
 
