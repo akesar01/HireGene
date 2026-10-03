@@ -66,13 +66,14 @@ npm run dev
 **Environment variables:**
 - `DATABASE_URL` — PostgreSQL connection string
 - `API_KEY` — Shared API key for feed endpoints
-- `ADMIN_SECRET` — Bearer token for admin endpoints
+- `ADMIN_SECRET` — Machine bearer token for admin endpoints (scripts and curl; the `/admin` dashboard uses Clerk with `ADMIN_USER_IDS` / `ADMIN_EMAILS` instead)
 - `APIFY_TOKEN` — Apify API token for LinkedIn/X scraping (`APIFY_API_KEY` is accepted as a fallback)
 - `APIFY_MAX_CONCURRENT` — Max simultaneous Apify runs (default 5, Apify free-plan cap)
 - `GROQ_API_KEY` — Groq API key for AI-powered post enrichment
 - `GROQ_MODEL` — Optional Groq model override (default `openai/gpt-oss-120b`)
 - `INGEST_ROLE_FAMILIES` — Role families allowed into the feed, comma-separated (default `engineering,ai_ml`); see the ingest quality gates in [DEPLOYMENT.md](./DEPLOYMENT.md)
 - `CORS_ORIGIN` — Allowed frontend origin(s), comma-separated
+- Email nudge and admin access variables (`RESEND_API_KEY`, `UNSUBSCRIBE_SECRET`, `ADMIN_EMAILS`, …) are listed in [DEPLOYMENT.md](./DEPLOYMENT.md)
 
 ## API Endpoints
 
