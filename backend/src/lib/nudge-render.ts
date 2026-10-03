@@ -1,6 +1,11 @@
 // Plain HTML + text templates for the match nudge. React Email was not used:
 // the backend tsconfig compiles only src/**/*.ts and has no React dependency,
 // and the template is one table. Everything is escaped before interpolation.
+//
+// Layout: one greeting line, one compact card per job (photo or initials,
+// title, poster, meta, at most one momentum line, a "View post" button), one
+// link to the feed, one footer line. Built for a phone screen and for
+// Gmail/Outlook: tables, inline styles, bulletproof buttons, no web fonts.
 
 import type { PosterKind } from "./nudge-select.js";
 
@@ -9,14 +14,19 @@ export interface RenderJob {
   title: string;
   company: string;
   author: string;
+  authorAvatar?: string | null;
   posterKind: PosterKind;
-  posterLine: string;
   levelLabel: string;
   remoteLabel: string;
-  stack: string[];
   postedAt: Date;
-  bullets: string[];
-  matchPercent: number;
+}
+
+/** Engagement already recorded for a job. Only real counts; never estimated. */
+export interface JobSignals {
+  /** JobApplication rows ("Applied" on the site). */
+  applied: number;
+  /** Distinct email recipients who clicked through to the job. */
+  viewers: number;
 }
 
 export interface RenderInput {
@@ -24,6 +34,8 @@ export interface RenderInput {
   jobs: RenderJob[];
   sendId: string;
   campaignKey: string;
+  /** Daily campaigns say "today" in the intro instead of "this week". */
+  daily?: boolean;
   /** Frontend origin, e.g. https://skiptheboard.in */
   siteUrl: string;
   /** Null (test sends) renders an inert footer instead of a working link. */
@@ -32,7 +44,10 @@ export interface RenderInput {
   /** Variant overrides. Templates accept {count} {companies} {name}. */
   subjectTemplate?: string | null;
   intro?: string | null;
-  contactEmail?: string;
+  /** Per-job counts for the momentum line. Missing jobs count as zero. */
+  signals?: ReadonlyMap<number, JobSignals>;
+  /** Send time: drives "posted N days ago", momentum, and avatar expiry. */
+  now?: Date;
 }
 
 export interface RenderedEmail {
@@ -42,12 +57,24 @@ export interface RenderedEmail {
   text: string;
 }
 
-export const DEFAULT_SUBJECT_TEMPLATE = "{count} jobs that match your resume: {companies}";
-export const DEFAULT_INTRO_TEMPLATE =
-  "These are the {count} posts on SkipTheBoard that best match your resume right now. Each one links to the original hiring post, so you can message the person who wrote it.";
+export const DEFAULT_SUBJECT_TEMPLATE = "{count} new jobs that match you";
+export const PREHEADER = "Picked from posts by the people hiring";
 
 export const UTM_SOURCE = "nudge";
 export const TEST_SEND_UNSUBSCRIBE_NOTE = "unsubscribe disabled in test sends";
+
+/** The site's accent (--accent in frontend/src/app/globals.css). */
+export const ACCENT = "#ff5414";
+const TEXT = "#1a1a1a";
+const MUTED = "#6b7280";
+const RULE = "#eeeeee";
+const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+
+export const MOMENTUM_MIN_APPLIED = 3;
+export const MOMENTUM_MIN_VIEWERS = 5;
+
+const MS_PER_HOUR = 3_600_000;
+const MS_PER_DAY = 24 * MS_PER_HOUR;
 
 export function escapeHtml(value: string): string {
   return value
@@ -58,22 +85,20 @@ export function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-/** "23 Sep" in UTC. Absolute dates stay true in an inbox; relative ones go stale. */
-export function formatPostedDate(date: Date): string {
-  return `${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]}`;
-}
-
 export function fillTemplate(template: string, vars: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (whole, key: string) => (key in vars ? vars[key] : whole));
+}
+
+function isKnown(value: string | null | undefined): value is string {
+  const v = (value ?? "").trim();
+  return v !== "" && v.toLowerCase() !== "unknown";
 }
 
 export function companiesLine(jobs: RenderJob[], max = 3): string {
   const seen: string[] = [];
   for (const job of jobs) {
     const name = job.company.trim();
-    if (!name || name.toLowerCase() === "unknown") continue;
+    if (!isKnown(name)) continue;
     if (seen.some((s) => s.toLowerCase() === name.toLowerCase())) continue;
     seen.push(name);
     if (seen.length >= max) break;
@@ -94,6 +119,10 @@ export function siteLink(siteUrl: string, path: string, campaignKey: string, con
   return url.toString();
 }
 
+function plural(n: number, one: string, many: string): string {
+  return n === 1 ? one : many;
+}
+
 function templateVars(input: RenderInput): Record<string, string> {
   const companies = companiesLine(input.jobs);
   return {
@@ -104,103 +133,189 @@ function templateVars(input: RenderInput): Record<string, string> {
 }
 
 export function renderSubject(input: RenderInput): string {
-  const template = input.subjectTemplate?.trim() || DEFAULT_SUBJECT_TEMPLATE;
-  return fillTemplate(template, templateVars(input)).replace(/\s+/g, " ").trim();
+  const override = input.subjectTemplate?.trim();
+  const n = input.jobs.length;
+  const subject = override ? fillTemplate(override, templateVars(input)) : `${n} new ${plural(n, "job that matches", "jobs that match")} you`;
+  return subject.replace(/\s+/g, " ").trim();
 }
 
-const STACK_LABELS: Record<string, string> = {
-  nodejs: "Node.js",
-  nextjs: "Next.js",
-  typescript: "TypeScript",
-  python: "Python",
-  java: "Java",
-  sql: "SQL",
-  ai: "AI",
-  aws: "AWS",
-  langchain: "LangChain",
-  rag: "RAG",
-  react: "React",
-  llm: "LLM",
-  go: "Go",
-  rust: "Rust",
-  docker: "Docker",
-};
-
-export function stackLabel(stack: string[], max = 3): string {
-  return stack
-    .slice(0, max)
-    .map((s) => STACK_LABELS[s.toLowerCase()] ?? s)
-    .join(", ");
+/** "Hi Ankit, 4 jobs matched your resume this week." or the variant intro. */
+export function renderIntro(input: RenderInput): string {
+  const vars = templateVars(input);
+  const override = input.intro?.trim();
+  if (override) return fillTemplate(override, vars).replace(/\s+/g, " ").trim();
+  const n = input.jobs.length;
+  const period = input.daily ? "today" : "this week";
+  return `Hi ${vars.name}, ${n} ${plural(n, "job", "jobs")} matched your resume ${period}.`;
 }
+
+// ─── Avatar ──────────────────────────────────────────────────────────────────
+
+/** "Srinivasarao Narayanasetty" -> "SN"; one word -> one letter. */
+export function initials(name: string): string {
+  const words = name
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+  if (words.length === 0) return "?";
+  const first = words[0][0];
+  const last = words.length > 1 ? words[words.length - 1][0] : "";
+  return (first + last).toUpperCase();
+}
+
+/**
+ * The photo URL to show, or null for the initials badge. LinkedIn media URLs
+ * carry their expiry as `e=<unix seconds>`; past that they 403, so an expired
+ * one is treated like a missing one.
+ */
+export function usableAvatarUrl(url: string | null | undefined, now: Date): string | null {
+  const raw = url?.trim();
+  if (!raw) return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return null;
+  if (/(^|\.)licdn\.com$/i.test(parsed.hostname)) {
+    const e = parsed.searchParams.get("e");
+    if (e !== null) {
+      const expiresAt = Number(e) * 1000;
+      if (!Number.isFinite(expiresAt) || expiresAt <= now.getTime()) return null;
+    }
+  }
+  return raw;
+}
+
+function avatarHtml(job: RenderJob, now: Date): string {
+  const name = job.author.trim() || "Poster";
+  const src = usableAvatarUrl(job.authorAvatar, now);
+  if (src) {
+    return `<img src="${escapeHtml(src)}" width="48" height="48" alt="${escapeHtml(name)}" style="display:block;width:48px;height:48px;border:0;border-radius:24px;object-fit:cover;">`;
+  }
+  return `<table role="presentation" width="48" height="48" cellpadding="0" cellspacing="0" border="0" style="width:48px;height:48px;"><tr><td width="48" height="48" align="center" valign="middle" bgcolor="${ACCENT}" aria-label="${escapeHtml(name)}" style="width:48px;height:48px;border-radius:24px;background:${ACCENT};color:#ffffff;font-family:${FONT};font-size:17px;font-weight:700;line-height:48px;text-align:center;">${escapeHtml(initials(name))}</td></tr></table>`;
+}
+
+// ─── Card lines ──────────────────────────────────────────────────────────────
+
+/** Whole days since posting, never negative. */
+export function daysSince(postedAt: Date, now: Date): number {
+  return Math.max(0, Math.floor((now.getTime() - postedAt.getTime()) / MS_PER_DAY));
+}
+
+export function postedAgo(postedAt: Date, now: Date): string {
+  const days = daysSince(postedAt, now);
+  if (days === 0) return "posted today";
+  return `posted ${days} ${plural(days, "day", "days")} ago`;
+}
+
+export type MomentumKind = "applied" | "viewed" | "fresh" | "recent";
+
+export interface Momentum {
+  kind: MomentumKind;
+  text: string;
+}
+
+/**
+ * The single momentum line for a card, or null when nothing true applies.
+ * First match wins: applications, then click-throughs, then posting age.
+ * Counts are printed exactly as recorded.
+ */
+export function momentumFor(job: Pick<RenderJob, "postedAt">, signals: JobSignals | undefined, now: Date): Momentum | null {
+  const applied = signals?.applied ?? 0;
+  const viewers = signals?.viewers ?? 0;
+  if (applied >= MOMENTUM_MIN_APPLIED) return { kind: "applied", text: `${applied} people applied via SkipTheBoard` };
+  if (viewers >= MOMENTUM_MIN_VIEWERS) return { kind: "viewed", text: `${viewers} people viewed this` };
+  const ageMs = now.getTime() - job.postedAt.getTime();
+  if (ageMs < MS_PER_DAY) return { kind: "fresh", text: "Posted today, early applicants get noticed" };
+  const days = daysSince(job.postedAt, now);
+  if (days >= 2 && days <= 6) return { kind: "recent", text: `Posted ${days} days ago, apply before it fills up` };
+  return null;
+}
+
+export interface CardLines {
+  title: string;
+  poster: string;
+  meta: string;
+  momentum: string | null;
+}
+
+/** The text of one card. Unknown parts are dropped, never printed as placeholders. */
+export function cardLines(job: RenderJob, signals: JobSignals | undefined, now: Date): CardLines {
+  const title = [job.title.trim(), isKnown(job.company) ? job.company.trim() : ""].filter(Boolean).join(" · ");
+  const firstName = job.author.trim().split(/\s+/)[0] ?? "";
+  const poster = [firstName, job.posterKind].filter(isKnown).join(" · ");
+  const momentum = momentumFor(job, signals, now);
+  // When the momentum line already states the posting age, the meta line skips it.
+  const statesAge = momentum?.kind === "fresh" || momentum?.kind === "recent";
+  const meta = [job.levelLabel, job.remoteLabel, statesAge ? "" : postedAgo(job.postedAt, now)].filter(isKnown).join(" · ");
+  return { title, poster, meta, momentum: momentum?.text ?? null };
+}
+
+/** Table-based button: the cell carries the color so Outlook paints it too. */
+function buttonHtml(href: string, label: string): string {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" bgcolor="${ACCENT}" style="border-radius:6px;background:${ACCENT};"><a href="${escapeHtml(href)}" target="_blank" style="display:inline-block;padding:9px 18px;font-family:${FONT};font-size:14px;font-weight:600;line-height:18px;color:#ffffff;text-decoration:none;border-radius:6px;">${escapeHtml(label)}</a></td></tr></table>`;
+}
+
+// ─── Email ───────────────────────────────────────────────────────────────────
 
 export function renderNudgeEmail(input: RenderInput): RenderedEmail {
-  const vars = templateVars(input);
+  const now = input.now ?? new Date();
   const subject = renderSubject(input);
-  const intro = fillTemplate(input.intro?.trim() || DEFAULT_INTRO_TEMPLATE, vars);
-  const preheader = `Your top ${input.jobs.length} matches, picked from posts by the people hiring.`;
-  const contact = input.contactEmail ?? "hello@skiptheboard.in";
+  const intro = renderIntro(input);
+  const preheader = PREHEADER;
   const feedUrl = siteLink(input.siteUrl, "/", input.campaignKey, "feed");
-  const profileUrl = siteLink(input.siteUrl, "/profile", input.campaignKey, "profile");
-  const greeting = vars.name === "there" ? "Hi there," : `Hi ${vars.name},`;
-  const unsubscribeHtml = input.unsubscribeUrl
-    ? `<a href="${escapeHtml(input.unsubscribeUrl)}" style="color:#6b7280;">Unsubscribe in one click</a>`
-    : `<span style="color:#6b7280;">${TEST_SEND_UNSUBSCRIBE_NOTE}</span>`;
-  const unsubscribeText = input.unsubscribeUrl ? `Unsubscribe in one click: ${input.unsubscribeUrl}` : TEST_SEND_UNSUBSCRIBE_NOTE;
+  const reason = "You get this because you uploaded your resume to SkipTheBoard.";
 
-  const jobsHtml = input.jobs
-    .map((job, index) => {
-      const meta = [job.levelLabel, job.remoteLabel, stackLabel(job.stack), `Posted ${formatPostedDate(job.postedAt)}`]
-        .filter(Boolean)
-        .map(escapeHtml)
-        .join(" &middot; ");
-      const bullets = job.bullets.map((b) => `<li style="margin:0 0 4px 0;">${escapeHtml(b)}</li>`).join("");
-      const open = goUrl(input.siteUrl, input.sendId, job.id);
-      const dm = siteLink(input.siteUrl, "/", input.campaignKey, `dm-${job.id}`);
-      return `
-<tr><td style="padding:18px 0;border-top:1px solid #e5e7eb;">
-  <div style="font-size:16px;font-weight:700;color:#1a1a1a;line-height:1.4;">
-    ${index + 1}. ${escapeHtml(job.title)} &middot; ${escapeHtml(job.company)}
-    <span style="display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;background:#fff0eb;color:#e64a0e;font-size:12px;font-weight:600;vertical-align:middle;">Match ${job.matchPercent}%</span>
-  </div>
-  <div style="font-size:13px;color:#4b5563;margin-top:4px;">
-    Posted by <strong style="color:#1a1a1a;">${escapeHtml(job.author)}</strong>${job.posterLine ? ` &middot; ${escapeHtml(job.posterLine)}` : ""} &middot; <em>${escapeHtml(job.posterKind)}</em>
-  </div>
-  <div style="font-size:13px;color:#6b7280;margin-top:2px;">${meta}</div>
-  ${bullets ? `<ul style="margin:8px 0 0 0;padding-left:18px;font-size:13px;color:#374151;">${bullets}</ul>` : ""}
-  <div style="font-size:13px;margin-top:10px;">
-    <a href="${escapeHtml(open)}" style="color:#e64a0e;font-weight:600;text-decoration:none;">Open the original post &rarr;</a>
-    &nbsp;&middot;&nbsp;
-    <a href="${escapeHtml(dm)}" style="color:#4b5563;text-decoration:underline;">Draft a DM from your resume &rarr;</a>
-  </div>
-</td></tr>`;
-    })
+  const cards = input.jobs.map((job) => ({
+    job,
+    lines: cardLines(job, input.signals?.get(job.id), now),
+    href: goUrl(input.siteUrl, input.sendId, job.id),
+  }));
+
+  const muted = `font-size:13px;line-height:19px;color:${MUTED};`;
+  const jobsHtml = cards
+    .map(
+      ({ job, lines, href }) => `
+<tr><td style="padding:18px 0;border-top:1px solid ${RULE};">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+<td width="48" valign="top" style="width:48px;padding:2px 14px 0 0;">${avatarHtml(job, now)}</td>
+<td valign="top" style="font-family:${FONT};">
+<div style="font-size:15px;line-height:21px;font-weight:700;color:${TEXT};">${escapeHtml(lines.title)}</div>
+${lines.poster ? `<div style="${muted}padding-top:2px;">${escapeHtml(lines.poster)}</div>` : ""}
+${lines.meta ? `<div style="${muted}">${escapeHtml(lines.meta)}</div>` : ""}
+${lines.momentum ? `<div style="font-size:13px;line-height:19px;font-weight:600;color:${ACCENT};padding-top:4px;">${escapeHtml(lines.momentum)}</div>` : ""}
+<div style="padding-top:10px;">${buttonHtml(href, "View post")}</div>
+</td></tr></table>
+</td></tr>`,
+    )
     .join("");
+
+  const unsubscribeHtml = input.unsubscribeUrl
+    ? `<a href="${escapeHtml(input.unsubscribeUrl)}" style="color:${MUTED};text-decoration:underline;">Unsubscribe</a>`
+    : `<span>${TEST_SEND_UNSUBSCRIBE_NOTE}</span>`;
 
   const html = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
 <title>${escapeHtml(subject)}</title>
 </head>
-<body style="margin:0;padding:0;background:#f7f7f8;font-family:Inter,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
-<span style="display:none!important;visibility:hidden;opacity:0;color:transparent;height:0;width:0;overflow:hidden;">${escapeHtml(preheader)}</span>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f7f7f8;padding:24px 12px;">
-<tr><td align="center">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:28px;">
-<tr><td style="font-size:18px;font-weight:700;color:#1a1a1a;padding-bottom:12px;">SkipTheBoard</td></tr>
-<tr><td style="font-size:14px;color:#374151;line-height:1.6;padding-bottom:8px;">${escapeHtml(greeting)}</td></tr>
-<tr><td style="font-size:14px;color:#374151;line-height:1.6;padding-bottom:12px;">${escapeHtml(intro)}</td></tr>
+<body style="margin:0;padding:0;background:#ffffff;font-family:${FONT};">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${escapeHtml(preheader)}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;">
+<tr><td align="center" style="padding:24px 16px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;">
+<tr><td style="padding:0 0 18px 0;font-family:${FONT};font-size:16px;line-height:24px;color:${TEXT};">${escapeHtml(intro)}</td></tr>
 ${jobsHtml}
-<tr><td style="padding:18px 0 0 0;border-top:1px solid #e5e7eb;font-size:14px;color:#374151;line-height:1.6;">
-  <a href="${escapeHtml(feedUrl)}" style="color:#e64a0e;font-weight:600;text-decoration:none;">See the full ranked feed &rarr;</a><br>
-  Scores come from your resume on your <a href="${escapeHtml(profileUrl)}" style="color:#4b5563;">profile</a>. Update it and next time's picks change.
+<tr><td style="padding:18px 0;border-top:1px solid ${RULE};font-family:${FONT};font-size:14px;line-height:20px;">
+<a href="${escapeHtml(feedUrl)}" style="color:${ACCENT};font-weight:600;text-decoration:none;">See all jobs on SkipTheBoard</a>
 </td></tr>
-<tr><td style="padding-top:20px;font-size:12px;color:#9ca3af;line-height:1.6;">
-  You get this because you signed in to SkipTheBoard and uploaded a resume.
-  <a href="${escapeHtml(input.preferencesUrl)}" style="color:#6b7280;">Change frequency</a> &middot;
-  ${unsubscribeHtml}<br>
-  SkipTheBoard &middot; ${escapeHtml(contact)} &middot; We never sell or share your email.
+<tr><td style="padding:8px 0 0 0;font-family:${FONT};font-size:12px;line-height:18px;color:${MUTED};">
+${escapeHtml(reason)} ${unsubscribeHtml} &middot; <a href="${escapeHtml(input.preferencesUrl)}" style="color:${MUTED};text-decoration:underline;">Email settings</a>
 </td></tr>
 </table>
 </td></tr>
@@ -208,36 +323,20 @@ ${jobsHtml}
 </body>
 </html>`;
 
-  const textJobs = input.jobs
-    .map((job, index) => {
-      const meta = [job.levelLabel, job.remoteLabel, stackLabel(job.stack), `Posted ${formatPostedDate(job.postedAt)}`]
-        .filter(Boolean)
-        .join(" · ");
-      const lines = [
-        `${index + 1}. ${job.title} · ${job.company} (Match ${job.matchPercent}%)`,
-        `   Posted by ${job.author}${job.posterLine ? ` · ${job.posterLine}` : ""} · ${job.posterKind}`,
-        `   ${meta}`,
-        ...job.bullets.map((b) => `   • ${b}`),
-        `   Open the original post: ${goUrl(input.siteUrl, input.sendId, job.id)}`,
-      ];
-      return lines.join("\n");
-    })
+  const textJobs = cards
+    .map(({ lines, href }) => [lines.title, lines.poster, lines.meta, lines.momentum, `View post: ${href}`].filter(Boolean).join("\n"))
     .join("\n\n");
 
   const text = [
-    greeting,
-    "",
     intro,
     "",
     textJobs,
     "",
-    `See the full ranked feed: ${feedUrl}`,
-    `Update your resume or preferences: ${profileUrl}`,
+    `See all jobs on SkipTheBoard: ${feedUrl}`,
     "",
-    "You get this because you signed in to SkipTheBoard and uploaded a resume.",
-    `Change frequency: ${input.preferencesUrl}`,
-    unsubscribeText,
-    `SkipTheBoard · ${contact} · We never sell or share your email.`,
+    reason,
+    input.unsubscribeUrl ? `Unsubscribe: ${input.unsubscribeUrl}` : TEST_SEND_UNSUBSCRIBE_NOTE,
+    `Email settings: ${input.preferencesUrl}`,
   ].join("\n");
 
   return { subject, preheader, html, text };

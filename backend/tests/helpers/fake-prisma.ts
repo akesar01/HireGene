@@ -230,12 +230,16 @@ export class FakeTable {
   }
 
   async groupBy(args: Row): Promise<Row[]> {
-    const [field] = args.by as string[];
-    const groups = new Map<unknown, number>();
+    const fields = args.by as string[];
+    const groups = new Map<string, { key: Row; count: number }>();
     for (const row of this.rows.filter((r) => this.matches(r, args.where))) {
-      groups.set(row[field], (groups.get(row[field]) ?? 0) + 1);
+      const key = pick(row, Object.fromEntries(fields.map((f) => [f, true])));
+      const id = JSON.stringify(fields.map((f) => row[f]));
+      const group = groups.get(id) ?? { key, count: 0 };
+      group.count += 1;
+      groups.set(id, group);
     }
-    let out = [...groups.entries()].map(([value, count]) => ({ [field]: value, _count: { _all: count } }));
+    let out = [...groups.values()].map(({ key, count }) => ({ ...key, _count: { _all: count } }));
     out.sort((a, b) => b._count._all - a._count._all);
     if (args.take) out = out.slice(0, args.take);
     return out;
