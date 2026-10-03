@@ -173,7 +173,7 @@ Use `?once=1` to scrape a single due recruiter and stop.
 
 Signed-in users with a resume profile get an email with the jobs on the board that best match their resume. Everything lives behind `backend/src/lib/email.ts` (provider), `nudge-select.ts` (pure ranking, senior override, gates), `nudge-render.ts` (plain HTML + text template) and `nudge-send.ts` (campaign runner). The send path never calls an LLM.
 
-**The email.** Subject "4 new jobs that match you", preheader "Picked from posts by the people hiring" (experiment variants can override the subject and the top line). One column, 560px max, white, system fonts, the site accent `#ff5414`, table-based buttons for Gmail and Outlook, plus a plain-text part with the same content:
+**The email.** Subject "4 new jobs that match you", preheader "Picked from posts by the people hiring" (experiment variants can override the subject and the top line; daily campaigns say "today" instead of "this week"). One column, 560px max, white, system fonts, the site accent `#ff5414`, table-based buttons for Gmail and Outlook, plus a plain-text part with the same content:
 
 ```
 Hi Ankit, 4 jobs matched your resume this week.
