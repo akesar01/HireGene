@@ -76,7 +76,7 @@ export default function SendPanel({ getToken }: { getToken: () => Promise<string
       const next = !schedule.paused;
       await adminApi.setSchedulePaused(t, next);
       setSchedule({ ...schedule, paused: next });
-      setNotice(next ? "Weekly schedule paused. The cron will create no campaigns until resumed." : "Weekly schedule resumed.");
+      setNotice(next ? "Schedule paused. The cron will create no campaigns until resumed." : "Schedule resumed. The next cron tick will create and send its campaign.");
     } catch (e) {
       fail(e);
     } finally {
@@ -129,6 +129,12 @@ export default function SendPanel({ getToken }: { getToken: () => Promise<string
     <div className="space-y-4">
       {error && <ErrorBanner message={error} onDismiss={() => setError("")} />}
       {notice && <Notice message={notice} />}
+      {schedule?.paused && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <strong>Scheduled sends are paused.</strong> The daily cron creates no campaigns and no nudge goes out on its own until you press
+          Resume schedule below. Send now and test sends still work.
+        </div>
+      )}
 
       <div className="grid md:grid-cols-2 gap-4">
         <Card title="Weekly schedule">

@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { emails, clerkLookup } = vi.hoisted(() => {
+const { emails, clerkLookup, CRON_SECRET } = vi.hoisted(() => {
+  const CRON_SECRET = "cron-test-secret";
+  process.env.CRON_SECRET = CRON_SECRET;
   const emails = {} as Record<string, string>;
   const clerkLookup = async (ids: string[]) =>
     new Map(ids.filter((id) => emails[id]).map((id) => [id, { userId: id, email: emails[id], firstName: null }]));
-  return { emails, clerkLookup };
+  return { emails, clerkLookup, CRON_SECRET };
 });
 
 vi.mock("../src/lib/prisma", async () => {
@@ -19,11 +21,22 @@ vi.mock("../src/lib/mongo", async () => {
 vi.mock("../src/lib/clerk-users", () => ({ fetchClerkUsers: vi.fn(clerkLookup) }));
 vi.mock("@vercel/functions", () => ({ waitUntil: vi.fn() }));
 
+import app from "../src/index";
 import { prisma } from "../src/lib/prisma";
 import { getProfilesCollection } from "../src/lib/mongo";
 import { fetchClerkUsers } from "../src/lib/clerk-users";
 import type { EmailProvider, OutgoingEmail } from "../src/lib/email";
-import { isoWeekKey, nextNudgeTick, runCampaign, scheduledCampaignFor, sendTestNudge, type RunCampaignResult } from "../src/lib/nudge-send";
+import {
+  ensureScheduledCampaign,
+  isSchedulePaused,
+  isoWeekKey,
+  nextNudgeTick,
+  runCampaign,
+  scheduledCampaignFor,
+  sendTestNudge,
+  setSchedulePaused,
+  type RunCampaignResult,
+} from "../src/lib/nudge-send";
 
 const db = prisma as unknown as ReturnType<typeof import("./helpers/fake-prisma").createFakePrisma>;
 const NOW = new Date("2026-09-28T02:30:00Z"); // a Monday
@@ -310,6 +323,49 @@ describe("sendTestNudge", () => {
       expect(out).not.toContain("/unsubscribe?t=");
     }
     expect(await db.nudgeSend.count({})).toBe(0);
+  });
+});
+
+describe("scheduled campaigns", () => {
+  it("starts paused: with no settings row the cron creates no campaign until an admin resumes", async () => {
+    expect(await isSchedulePaused()).toBe(true);
+    expect(await ensureScheduledCampaign(NOW)).toBeNull();
+    expect(await db.campaign.count({})).toBe(0);
+
+    await setSchedulePaused(false);
+    expect(await isSchedulePaused()).toBe(false);
+    const campaign = await ensureScheduledCampaign(NOW);
+    expect(campaign).toMatchObject({ key: "weekly-2026-W40", kind: "weekly", createdBy: "cron" });
+    expect(await db.campaign.count({})).toBe(1);
+
+    await setSchedulePaused(true);
+    expect(await isSchedulePaused()).toBe(true);
+    expect(await ensureScheduledCampaign(new Date("2026-10-05T02:30:00Z"))).toBeNull();
+    expect(await db.campaign.count({})).toBe(1);
+  });
+
+  it("the cron endpoint sends nothing on a fresh deployment and sends once the schedule is resumed", async () => {
+    await seedProfiles(["user_daily"]);
+    emails.user_daily = "daily@example.com";
+    await db.emailPreference.create({ data: { userId: "user_daily", subscribed: true, frequency: "daily", unsubscribeToken: "t-daily" } });
+    db.job.rows.length = 0;
+    seedJob(1, { postedAt: new Date(), createdAt: new Date() });
+    const headers = { Authorization: `Bearer ${CRON_SECRET}` };
+
+    const paused = await app.request("/api/cron/nudges", { method: "POST", headers });
+    expect(paused.status).toBe(200);
+    await expect(paused.json()).resolves.toMatchObject({ ok: true, skipped: true });
+    expect(await db.campaign.count({})).toBe(0);
+    expect(await db.nudgeSend.count({})).toBe(0);
+
+    await setSchedulePaused(false);
+    const resumed = await app.request("/api/cron/nudges", { method: "POST", headers });
+    expect(resumed.status).toBe(200);
+    await expect(resumed.json()).resolves.toMatchObject({ ok: true, sent: 1, remaining: 0, completed: true, dryRun: true });
+    expect(await db.campaign.count({})).toBe(1);
+    const rows = await db.nudgeSend.findMany({});
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ userId: "user_daily", status: "dry_run" });
   });
 });
 

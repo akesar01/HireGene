@@ -249,9 +249,10 @@ export function buildNudge(options: {
 
 // ─── Schedule ────────────────────────────────────────────────────────────────
 
+/** Paused until an admin explicitly resumes: only a stored "false" lets the cron send. */
 export async function isSchedulePaused(): Promise<boolean> {
   const row = await prisma.appSetting.findUnique({ where: { key: SCHEDULE_PAUSED_KEY } });
-  return row?.value === "true";
+  return row?.value !== "false";
 }
 
 export async function setSchedulePaused(paused: boolean): Promise<void> {

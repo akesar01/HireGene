@@ -59,7 +59,8 @@ const SENIOR_TITLE_RE =
 // A years figure counts only as an "N+" form or beside an experience cue in
 // the same clause: "5+ years", "7-12 YOE", "minimum 6 yrs", "at least 5 years
 // of experience". "a fintech with 12 years in market" does not count.
-const YEARS_RE = /(?<![\d.])(\d{1,2})\s*(\+)?(?:\s*(?:-|–|to)\s*(\d{1,2}))?\s*(\+)?\s*(?:years?|yrs?|yoe)\b/gi;
+const YEARS_RE =
+  /(?<![\d.])(\d{1,2}(?:\.\d+)?)\s*(\+)?(?:\s*(?:-|–|to)\s*(\d{1,2}(?:\.\d+)?))?\s*(\+)?\s*(?:years?|yrs?|yoe)\b/gi;
 const EXPERIENCE_CUE_RE = /\bexperience|\bexp\b|\byoe\b|\bminimum\b|\bmin\b|\bat\s?least\b/i;
 const ABBREVIATION_PERIOD_RE = /\b(exp|min|yrs?)\.(?=\s|$)/gi;
 const CLAUSE_BREAK_RE = /\.(?=\s|$)|[;|\n•·]/;
