@@ -9,6 +9,7 @@ import ResumeDisplay from "@/components/ResumeDisplay";
 import FilterEditor from "@/components/FilterEditor";
 import { getProfile, type ResumeProfile } from "@/lib/profile";
 import ResumeShareLink from "@/components/ResumeShareLink";
+import EmailNudgeSettings from "@/components/EmailNudgeSettings";
 
 export default function ProfilePage() {
   const { isLoaded, isSignedIn, getToken } = useAuth();
@@ -164,6 +165,12 @@ export default function ProfilePage() {
                 onUpdated={(p) => setProfile(p)}
                 onError={(msg) => setError(msg)}
               />
+            </div>
+
+            {/* Email nudges */}
+            <div>
+              <h2 className="text-sm font-bold uppercase tracking-wider text-foreground mb-3">Email</h2>
+              <EmailNudgeSettings />
             </div>
 
             {/* Back to feed */}

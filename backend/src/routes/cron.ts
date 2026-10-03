@@ -4,6 +4,7 @@ import { JOB_EXPIRY_DAYS } from "../lib/config.js";
 import { purgeExpiredJobs } from "../lib/job-expiry.js";
 import { scrapeDueBatch } from "../lib/scrape-due.js";
 import { shouldStartScrapeDrain } from "../lib/scrape-chain.js";
+import { continueCampaignLater, ensureScheduledCampaign, runCampaign } from "../lib/nudge-send.js";
 
 const cron = new Hono();
 
@@ -125,9 +126,40 @@ async function handleExpireJobs(c: Context) {
   });
 }
 
+// Daily 02:30 UTC. Mondays: weekly campaign to all subscribers. Other days:
+// daily campaign, only when someone chose daily. `?campaign=<id>` continues
+// a specific campaign (self-continuation after the time budget).
+async function handleNudges(c: Context) {
+  const explicit = c.req.query("campaign");
+  let campaignId: number | null = null;
+  if (explicit) {
+    campaignId = Number(explicit);
+    if (!Number.isInteger(campaignId) || campaignId <= 0) {
+      return c.json({ error: "campaign must be a positive integer" }, 400);
+    }
+  } else {
+    const campaign = await ensureScheduledCampaign(new Date());
+    if (!campaign) {
+      return c.json({ ok: true, skipped: true, message: "No campaign scheduled today (paused, or no daily subscribers)" });
+    }
+    campaignId = campaign.id;
+  }
+
+  const result = await runCampaign({ campaignId });
+  console.log(
+    `[cron] nudges: campaign=${result.campaignKey} processed=${result.processed} sent=${result.sent} ` +
+      `skipped=${result.skipped} holdout=${result.holdout} failed=${result.failed} alreadyClaimed=${result.alreadyClaimed} remaining=${result.remaining}` +
+      `${result.dryRun ? " dryRun=true" : ""}`,
+  );
+  if (result.remaining > 0) continueCampaignLater(campaignId);
+  return c.json({ ok: result.failed === 0, ...result });
+}
+
 cron.get("/scrape", handleScrape);
 cron.post("/scrape", handleScrape);
 cron.get("/expire-jobs", handleExpireJobs);
 cron.post("/expire-jobs", handleExpireJobs);
+cron.get("/nudges", handleNudges);
+cron.post("/nudges", handleNudges);
 
 export default cron;

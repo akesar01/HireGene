@@ -163,3 +163,43 @@ export async function updateProfile(
   const data = await res.json() as { profile: ResumeProfile };
   return data.profile;
 }
+
+// ─── Email nudges ─────────────────────────────────────────────────────────────
+
+export type EmailFrequency = "weekly" | "daily";
+
+export interface EmailPreferences {
+  subscribed: boolean;
+  frequency: EmailFrequency;
+  pausedUntil: string | null;
+  unsubscribedAt: string | null;
+  lastSentAt: string | null;
+  /** True when the user never changed anything (defaults apply). */
+  isDefault: boolean;
+}
+
+export async function getEmailPreferences(token: string): Promise<EmailPreferences> {
+  const res = await fetch(`${BACKEND_URL}/api/email/preferences`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Email preferences API returned ${res.status}`);
+  const data = (await res.json()) as { preferences: EmailPreferences };
+  return data.preferences;
+}
+
+export async function updateEmailPreferences(
+  token: string,
+  changes: Partial<Pick<EmailPreferences, "subscribed" | "frequency" | "pausedUntil">>,
+): Promise<EmailPreferences> {
+  const res = await fetch(`${BACKEND_URL}/api/email/preferences`, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(changes),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Update failed" }));
+    throw new Error(err.error ?? `Update failed (${res.status})`);
+  }
+  const data = (await res.json()) as { preferences: EmailPreferences };
+  return data.preferences;
+}

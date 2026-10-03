@@ -1,7 +1,8 @@
 {
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/[[...route]]" },
-    { "source": "/(health|docs)", "destination": "/api/[[...route]]" }
+    { "source": "/(health|docs)", "destination": "/api/[[...route]]" },
+    { "source": "/go/:path*", "destination": "/api/[[...route]]" }
   ],
   "functions": {
     "api/**/*.ts": {
@@ -16,6 +17,10 @@
     {
       "path": "/api/cron/scrape",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/nudges",
+      "schedule": "30 2 * * *"
     }
   ]
 }

@@ -8,6 +8,8 @@ import postsRoutes from "./routes/posts.js";
 import submissionsRoutes from "./routes/submissions.js";
 import profileRoutes from "./routes/profile.js";
 import billingRoutes from "./routes/billing.js";
+import emailRoutes from "./routes/email.js";
+import goRoutes from "./routes/go.js";
 import { clerkOptionalAuth } from "./lib/clerk-auth.js";
 import buildOpenApiSpec from "./openapi-spec.js";
 
@@ -44,6 +46,8 @@ app.route("/api/cron", cronRoutes);
 app.route("/api/posts", postsRoutes);
 app.route("/api/profile", profileRoutes);
 app.route("/api/billing", billingRoutes);
+app.route("/api/email", emailRoutes);
+app.route("/go", goRoutes);
 app.route("/api", submissionsRoutes);
 
 app.get("/health", (c) => c.json({ status: "ok" }));

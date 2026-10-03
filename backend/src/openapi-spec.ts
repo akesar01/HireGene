@@ -17,7 +17,12 @@ function buildOpenApiSpec(baseUrl: string) {
         type: "apiKey",
         in: "header",
         name: "Authorization",
-        description: "Bearer <ADMIN_SECRET>",
+        description: "Bearer <ADMIN_SECRET>, or a Clerk session token whose user id is in ADMIN_USER_IDS or whose primary email is in ADMIN_EMAILS",
+      },
+      ClerkAuth: {
+        type: "http",
+        scheme: "bearer",
+        description: "Clerk session token",
       },
       CronAuth: {
         type: "apiKey",
@@ -100,6 +105,155 @@ function buildOpenApiSpec(baseUrl: string) {
     },
   },
   paths: {
+    "/api/email/preferences": {
+      get: {
+        summary: "Current user's email nudge preferences",
+        tags: ["Email"],
+        security: [{ ClerkAuth: [] }],
+        responses: { "200": { description: "Preferences (defaults when the user never changed them)" }, "401": { description: "Not signed in" } },
+      },
+      put: {
+        summary: "Update email nudge preferences",
+        tags: ["Email"],
+        security: [{ ClerkAuth: [] }],
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  subscribed: { type: "boolean" },
+                  frequency: { type: "string", enum: ["weekly", "daily"] },
+                  pausedUntil: { type: "string", format: "date-time", nullable: true },
+                },
+              },
+            },
+          },
+        },
+        responses: { "200": { description: "Updated preferences" } },
+      },
+    },
+    "/api/email/unsubscribe": {
+      get: {
+        summary: "Redirects to the unsubscribe confirm page on the site; does not change anything",
+        tags: ["Email"],
+        parameters: [{ name: "t", in: "query", required: true, schema: { type: "string" }, description: "Signed token from the email footer" }],
+        responses: { "302": { description: "Redirect to FRONTEND_URL/unsubscribe?t=<token>" } },
+      },
+      post: {
+        summary: "One-click unsubscribe (signed token, no login); RFC 8058 List-Unsubscribe-Post target",
+        tags: ["Email"],
+        parameters: [
+          { name: "t", in: "query", required: true, schema: { type: "string" }, description: "Signed token from the email footer" },
+          { name: "action", in: "query", schema: { type: "string", enum: ["resubscribe"] } },
+        ],
+        responses: { "200": { description: "Subscription state" }, "400": { description: "Invalid token" } },
+      },
+    },
+    "/api/email/webhook": {
+      post: {
+        summary: "Resend webhook (Svix-signed): delivered, opened, clicked, bounced, complained",
+        tags: ["Email"],
+        responses: {
+          "200": { description: "Recorded (or duplicate)" },
+          "400": { description: "Bad signature or body" },
+          "503": { description: "RESEND_WEBHOOK_SECRET not set" },
+        },
+      },
+    },
+    "/go/{sendId}/{jobId}": {
+      get: {
+        summary: "Log an email click and redirect to the original post",
+        tags: ["Email"],
+        parameters: [
+          { name: "sendId", in: "path", required: true, schema: { type: "string" } },
+          { name: "jobId", in: "path", required: true, schema: { type: "integer" } },
+        ],
+        responses: { "302": { description: "Redirect to the job's source URL, or to the feed when unknown" } },
+      },
+    },
+    "/api/cron/nudges": {
+      get: {
+        summary: "Daily nudge tick: weekly campaign on Mondays, daily campaign otherwise",
+        tags: ["Cron"],
+        security: [{ CronAuth: [] }],
+        parameters: [{ name: "campaign", in: "query", schema: { type: "integer" }, description: "Continue a specific campaign" }],
+        responses: { "200": { description: "Run summary" }, "401": { description: "Unauthorized" } },
+      },
+      post: { summary: "Same as GET", tags: ["Cron"], security: [{ CronAuth: [] }], responses: { "200": { description: "Run summary" } } },
+    },
+    "/api/admin/whoami": {
+      get: { summary: "Confirm admin access", tags: ["Admin"], security: [{ AdminAuth: [] }], responses: { "200": { description: "ok" }, "401": { description: "Not signed in" }, "403": { description: "Not an admin" } } },
+    },
+    "/api/admin/stats/subscribers": {
+      get: { summary: "Subscriber counts", tags: ["Admin"], security: [{ AdminAuth: [] }], responses: { "200": { description: "Counts" } } },
+    },
+    "/api/admin/stats/email": {
+      get: {
+        summary: "Per-campaign and per-variant email performance plus top clicked jobs",
+        tags: ["Admin"],
+        security: [{ AdminAuth: [] }],
+        parameters: [{ name: "campaignId", in: "query", schema: { type: "integer" } }],
+        responses: { "200": { description: "Stats" } },
+      },
+    },
+    "/api/admin/stats/jobs": {
+      get: {
+        summary: "Live jobs, jobs added per day by level and source, jobs per hiring manager, email job clicks",
+        tags: ["Admin"],
+        security: [{ AdminAuth: [] }],
+        parameters: [{ name: "days", in: "query", schema: { type: "integer", default: 14 } }],
+        responses: { "200": { description: "Stats" } },
+      },
+    },
+    "/api/admin/nudges/users": {
+      get: { summary: "Eligible recipients for the preview picker", tags: ["Admin"], security: [{ AdminAuth: [] }], parameters: [{ name: "q", in: "query", schema: { type: "string" } }], responses: { "200": { description: "Users" } } },
+    },
+    "/api/admin/nudges/preview": {
+      get: {
+        summary: "Render a user's nudge without sending",
+        tags: ["Admin"],
+        security: [{ AdminAuth: [] }],
+        parameters: [
+          { name: "userId", in: "query", required: true, schema: { type: "string" } },
+          { name: "campaignId", in: "query", schema: { type: "integer" } },
+          { name: "variantId", in: "query", schema: { type: "integer" } },
+        ],
+        responses: { "200": { description: "Subject, html, text, picks, or the skip reason" } },
+      },
+    },
+    "/api/admin/nudges/test": {
+      post: {
+        summary: "Send one test email to an address (dry run without RESEND_API_KEY)",
+        tags: ["Admin"],
+        security: [{ AdminAuth: [] }],
+        requestBody: { content: { "application/json": { schema: { type: "object", required: ["to", "userId"], properties: { to: { type: "string" }, userId: { type: "string" }, campaignId: { type: "integer" }, variantId: { type: "integer" } } } } } },
+        responses: { "200": { description: "Sent or dry run" }, "422": { description: "Nothing to send" } },
+      },
+    },
+    "/api/admin/nudges/schedule": {
+      get: { summary: "Weekly schedule state", tags: ["Admin"], security: [{ AdminAuth: [] }], responses: { "200": { description: "paused flag and cron" } } },
+      put: { summary: "Pause or resume the schedule", tags: ["Admin"], security: [{ AdminAuth: [] }], requestBody: { content: { "application/json": { schema: { type: "object", required: ["paused"], properties: { paused: { type: "boolean" } } } } } }, responses: { "200": { description: "paused flag" } } },
+    },
+    "/api/admin/nudges/campaigns": {
+      get: { summary: "List campaigns", tags: ["Admin"], security: [{ AdminAuth: [] }], responses: { "200": { description: "Campaigns with variants" } } },
+      post: {
+        summary: "Create an experiment with 2+ variants (weights sum to 100; a holdout arm receives nothing)",
+        tags: ["Admin"],
+        security: [{ AdminAuth: [] }],
+        requestBody: { content: { "application/json": { schema: { type: "object", required: ["name", "variants"], properties: { name: { type: "string" }, jobCount: { type: "integer" }, variants: { type: "array", items: { type: "object", properties: { key: { type: "string" }, name: { type: "string" }, weight: { type: "integer" }, isHoldout: { type: "boolean" }, subject: { type: "string", nullable: true }, intro: { type: "string", nullable: true }, jobCount: { type: "integer", nullable: true } } } } } } } } },
+        responses: { "201": { description: "Created (draft)" }, "400": { description: "Invalid variants" } },
+      },
+    },
+    "/api/admin/nudges/send-now": {
+      post: {
+        summary: "Run a campaign now (creates a manual campaign when none is given); continues itself past the time budget",
+        tags: ["Admin"],
+        security: [{ AdminAuth: [] }],
+        requestBody: { content: { "application/json": { schema: { type: "object", properties: { campaignId: { type: "integer" } } } } } },
+        responses: { "200": { description: "Run summary" }, "404": { description: "Campaign not found" }, "409": { description: "Already completed" } },
+      },
+    },
     // ─── Health ───
     "/health": {
       get: {

@@ -65,7 +65,7 @@ Each job post contains:
 - **Source** — LinkedIn or X, with direct link to original post
 - **Score** — community votes (upvote/downvote)
 - **Comments count**
-- **Posted time** — relative (e.g. "2h ago"), auto-expires after 7 days
+- **Posted time** — relative (e.g. "2h ago"), auto-expires after 30 days
 
 ## Backend
 
@@ -73,12 +73,14 @@ The backend is a Hono app with Prisma + PostgreSQL. It provides:
 - Post ingestion via Apify (LinkedIn/X scraping)
 - Recruiter suggestions (community submissions)
 - Voting on job posts
-- Admin endpoints (protected by `ADMIN_SECRET`)
+- Admin endpoints (`ADMIN_SECRET` bearer, or a Clerk admin per `ADMIN_USER_IDS` / `ADMIN_EMAILS`)
 - AI-powered post enrichment via Groq
 
 The frontend fetches jobs from the backend API. The API contract is aligned with the `Job` interface in `frontend/src/lib/data.ts`.
 
 Ingest path: `ingestPosts` in `backend/src/lib/apify.ts` -> `classifyPost` (`llm-classifier.ts`, regex fallback in `classifier.ts`) -> `inferCompany` (`extract-company.ts`) -> deterministic gates in `backend/src/lib/ingest-gates.ts` -> `prisma.job.create`. The feed is engineering-only by default (`INGEST_ROLE_FAMILIES`); skip reasons and the `scripts/reclassify-jobs.ts` cleanup are documented under "Ingest quality gates" in `DEPLOYMENT.md`. Add any new junk pattern as a failing test in `backend/tests/` first; the gates are pure functions and must never call the LLM.
+
+Email nudges: `runCampaign` in `backend/src/lib/nudge-send.ts` -> `selectJobsForUser` (`nudge-select.ts`, pure: re-applies `evaluateJobGates`, lifts SDE-3/5+ year roles to senior, excludes jobs already sent) -> `renderNudgeEmail` (`nudge-render.ts`, plain HTML + text) -> `EmailProvider` (`email.ts`, Resend or dry run without `RESEND_API_KEY`). Recipients are Clerk users with a Mongo profile; their emails come from Clerk, never from the resume. Admin access is `ADMIN_USER_IDS` / `ADMIN_EMAILS` (`admin-auth.ts`); the dashboard at `frontend/src/app/admin/` never sees `ADMIN_SECRET`. Operations, env vars, DNS and the cron list are under "Match-based email nudges" in `DEPLOYMENT.md`. Tests mock Prisma with `backend/tests/helpers/fake-prisma.ts`.
 
 Frontend config (`frontend/src/lib/config.ts`) centralizes `BACKEND_URL` and `API_KEY` — all client-side fetches import from there.
 
