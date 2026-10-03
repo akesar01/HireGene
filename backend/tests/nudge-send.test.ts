@@ -356,6 +356,23 @@ describe("loadJobSignals", () => {
   });
 });
 
+describe("intro period", () => {
+  it("previews say today on a daily day and an experiment named 'Daily digest' still says this week", async () => {
+    await seedProfiles(["user_a"]);
+    emails.user_a = "a@example.com";
+    const provider = new RecordingProvider(true);
+
+    await sendTestNudge({ to: "captain@example.com", userId: "user_a", provider, now: new Date("2026-09-30T02:30:00Z") });
+    expect(provider.sent[0].text).toMatch(/^Hi user_a, \d+ jobs? matched your resume today\./);
+
+    const experiment = await db.campaign.create({
+      data: { key: "exp-daily-digest-lx3k9", name: "Daily digest", kind: "experiment", status: "draft", jobCount: 5, createdBy: "test" },
+    });
+    await sendTestNudge({ to: "captain@example.com", userId: "user_a", campaignId: experiment.id, provider, now: NOW });
+    expect(provider.sent[1].text).toMatch(/^Hi user_a, \d+ jobs? matched your resume this week\./);
+  });
+});
+
 describe("scheduled campaigns", () => {
   it("starts paused: with no settings row the cron creates no campaign until an admin resumes", async () => {
     expect(await isSchedulePaused()).toBe(true);

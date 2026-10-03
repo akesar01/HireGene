@@ -216,7 +216,7 @@ export interface BuiltNudge {
 
 export function buildNudge(options: {
   sendId: string;
-  campaign: Pick<Campaign, "key" | "jobCount">;
+  campaign: Pick<Campaign, "key" | "kind" | "jobCount">;
   variant: Pick<CampaignVariant, "subject" | "intro" | "jobCount"> | null;
   profile: NudgeProfile;
   recipient: ClerkUserInfo & { email: string };
@@ -251,6 +251,7 @@ export function buildNudge(options: {
     jobs: selection.picks,
     sendId: options.sendId,
     campaignKey: options.campaign.key,
+    daily: options.campaign.kind === "daily",
     siteUrl: site,
     unsubscribeUrl,
     preferencesUrl: siteLink(site, "/profile", options.campaign.key, "preferences") + "#email",
@@ -619,8 +620,14 @@ export async function previewNudgeForUser(options: {
     ? await prisma.campaign.findUnique({ where: { id: options.campaignId }, include: { variants: true } })
     : null;
   const campaignSpec = campaign
-    ? { id: campaign.id, key: campaign.key, name: campaign.name, jobCount: campaign.jobCount }
-    : { id: null, key: `preview-${scheduledCampaignFor(now).key}`, name: "Preview", jobCount: DEFAULT_NUDGE_JOB_COUNT };
+    ? { id: campaign.id, key: campaign.key, name: campaign.name, kind: campaign.kind, jobCount: campaign.jobCount }
+    : {
+        id: null,
+        key: `preview-${scheduledCampaignFor(now).key}`,
+        name: "Preview",
+        kind: scheduledCampaignFor(now).kind,
+        jobCount: DEFAULT_NUDGE_JOB_COUNT,
+      };
   let variant: CampaignVariant | null = null;
   if (campaign && campaign.variants.length > 0) {
     variant =

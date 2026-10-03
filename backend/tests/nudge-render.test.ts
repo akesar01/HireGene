@@ -71,16 +71,14 @@ describe("subject, preheader and intro", () => {
   });
 
   it("handles one job, no name, and daily campaigns", () => {
-    const out = renderNudgeEmail({ ...input, jobs: [jobs[0]], recipientName: null, campaignKey: "daily-2026-10-03" });
+    const out = renderNudgeEmail({ ...input, jobs: [jobs[0]], recipientName: null, campaignKey: "daily-2026-10-03", daily: true });
     expect(out.subject).toBe("1 new job that matches you");
     expect(out.text.split("\n")[0]).toBe("Hi there, 1 job matched your resume today.");
   });
 
-  it("says today in the dashboard preview of a daily campaign", () => {
-    const daily = renderNudgeEmail({ ...input, campaignKey: "preview-daily-2026-10-03" });
-    expect(daily.text.split("\n")[0]).toBe("Hi Ankit, 2 jobs matched your resume today.");
-    const weekly = renderNudgeEmail({ ...input, campaignKey: "preview-weekly-2026-09-28" });
-    expect(weekly.text.split("\n")[0]).toBe("Hi Ankit, 2 jobs matched your resume this week.");
+  it("takes the period from the campaign kind, not the key", () => {
+    const experiment = renderNudgeEmail({ ...input, campaignKey: "exp-daily-digest-lx3k9", daily: false });
+    expect(experiment.text.split("\n")[0]).toBe("Hi Ankit, 2 jobs matched your resume this week.");
   });
 
   it("keeps experiment subject and intro overrides working", () => {

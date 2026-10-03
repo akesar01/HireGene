@@ -34,6 +34,8 @@ export interface RenderInput {
   jobs: RenderJob[];
   sendId: string;
   campaignKey: string;
+  /** Daily campaigns say "today" in the intro instead of "this week". */
+  daily?: boolean;
   /** Frontend origin, e.g. https://skiptheboard.in */
   siteUrl: string;
   /** Null (test sends) renders an inert footer instead of a working link. */
@@ -143,7 +145,7 @@ export function renderIntro(input: RenderInput): string {
   const override = input.intro?.trim();
   if (override) return fillTemplate(override, vars).replace(/\s+/g, " ").trim();
   const n = input.jobs.length;
-  const period = /(^|-)daily-/.test(input.campaignKey) ? "today" : "this week";
+  const period = input.daily ? "today" : "this week";
   return `Hi ${vars.name}, ${n} ${plural(n, "job", "jobs")} matched your resume ${period}.`;
 }
 
