@@ -76,6 +76,13 @@ describe("subject, preheader and intro", () => {
     expect(out.text.split("\n")[0]).toBe("Hi there, 1 job matched your resume today.");
   });
 
+  it("says today in the dashboard preview of a daily campaign", () => {
+    const daily = renderNudgeEmail({ ...input, campaignKey: "preview-daily-2026-10-03" });
+    expect(daily.text.split("\n")[0]).toBe("Hi Ankit, 2 jobs matched your resume today.");
+    const weekly = renderNudgeEmail({ ...input, campaignKey: "preview-weekly-2026-09-28" });
+    expect(weekly.text.split("\n")[0]).toBe("Hi Ankit, 2 jobs matched your resume this week.");
+  });
+
   it("keeps experiment subject and intro overrides working", () => {
     expect(companiesLine(jobs)).toBe("M2P Fintech, Zepto");
     expect(renderSubject({ ...input, subjectTemplate: "{name}, {count} new matches at {companies}" })).toBe(

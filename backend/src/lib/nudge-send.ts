@@ -171,7 +171,7 @@ export async function loadJobSignals(jobIds: number[]): Promise<Map<number, JobS
   if (jobIds.length === 0) return result;
   const [applied, clicks] = await Promise.all([
     prisma.jobApplication.groupBy({ by: ["jobId"], where: { jobId: { in: jobIds } }, _count: { _all: true } }),
-    prisma.nudgeClick.findMany({ where: { jobId: { in: jobIds } }, select: { jobId: true, sendId: true } }),
+    prisma.nudgeClick.groupBy({ by: ["jobId", "sendId"], where: { jobId: { in: jobIds } } }),
   ]);
   const entry = (jobId: number) => {
     let signals = result.get(jobId);
@@ -179,14 +179,9 @@ export async function loadJobSignals(jobIds: number[]): Promise<Map<number, JobS
     return signals;
   };
   for (const group of applied) entry(group.jobId).applied = group._count._all;
-  const viewers = new Map<number, Set<string>>();
-  for (const click of clicks) {
-    if (click.jobId === null) continue;
-    const sends = viewers.get(click.jobId) ?? new Set<string>();
-    sends.add(click.sendId);
-    viewers.set(click.jobId, sends);
+  for (const pair of clicks) {
+    if (pair.jobId !== null) entry(pair.jobId).viewers += 1;
   }
-  for (const [jobId, sends] of viewers) entry(jobId).viewers = sends.size;
   return result;
 }
 

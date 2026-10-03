@@ -143,7 +143,7 @@ export function renderIntro(input: RenderInput): string {
   const override = input.intro?.trim();
   if (override) return fillTemplate(override, vars).replace(/\s+/g, " ").trim();
   const n = input.jobs.length;
-  const period = input.campaignKey.startsWith("daily-") ? "today" : "this week";
+  const period = /(^|-)daily-/.test(input.campaignKey) ? "today" : "this week";
   return `Hi ${vars.name}, ${n} ${plural(n, "job", "jobs")} matched your resume ${period}.`;
 }
 
