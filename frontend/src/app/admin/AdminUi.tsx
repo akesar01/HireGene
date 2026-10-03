@@ -162,7 +162,7 @@ export function VariantResults({ totals, variants }: { totals: SendCounts; varia
         <p className="mt-2 text-xs text-muted-light">{totals.dryRun} recorded as dry run (no RESEND_API_KEY at send time); they never reached a provider.</p>
       )}
       {variants.length > 0 && (
-        <p className="mt-2 text-xs text-muted-light">Raw counts. Rates use delivered as the denominator (sent when nothing is delivered yet). No significance test is applied.</p>
+        <p className="mt-2 text-xs text-muted-light">Raw counts. Open and click rates divide by emails sent. No significance test is applied.</p>
       )}
     </div>
   );

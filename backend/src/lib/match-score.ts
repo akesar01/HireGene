@@ -1,12 +1,13 @@
 // Deterministic tag-overlap match score. Backend port of
 // frontend/src/lib/match.ts for the email send path (no LLM, no I/O).
 //
-// One deliberate difference from the frontend: a job with no stack tags gets
-// neutral half credit (20/40) on the stack term instead of 0/40. Scoring it 0
-// buried otherwise good matches (the Zepto, Microsoft and Zomato rows in the
-// design snapshot); leaving the term out entirely would rank "unknown stack"
-// above a real partial overlap. The term is omitted only when the profile
-// itself lists no stack.
+// The stack term is included whenever either side lists a stack, exactly as
+// on the site. One deliberate difference from the frontend: a job with no
+// stack tags gets neutral half credit (20/40) on that term instead of 0/40.
+// Scoring it 0 buried otherwise good matches (the Zepto, Microsoft and Zomato
+// rows in the design snapshot); leaving the term out entirely would rank
+// "unknown stack" above a real partial overlap. Every other input scores the
+// same here as on the site.
 
 function norm(value: string): string {
   return value.toLowerCase().replace(/[-.]/g, "_").trim();
@@ -48,7 +49,7 @@ export function computeTagOverlapScore(job: MatchJob, profile: MatchProfile): nu
   const profileStack = (profile.stack ?? []).map(norm);
   const jobStack = (job.stack ?? []).map(norm);
 
-  if (profileStack.length > 0) {
+  if (profileStack.length > 0 || jobStack.length > 0) {
     maxScore += 40;
     if (jobStack.length === 0) {
       score += 20;

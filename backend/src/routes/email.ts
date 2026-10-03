@@ -8,6 +8,7 @@ import { Webhook } from "svix";
 import { verifyUnsubscribeToken } from "../lib/email-tokens.js";
 import { getOrCreatePreference } from "../lib/nudge-send.js";
 import { prisma } from "../lib/prisma.js";
+import { frontendUrl } from "../lib/site-urls.js";
 
 type Variables = { userId: string | null };
 
@@ -105,15 +106,26 @@ async function handleUnsubscribe(c: Context) {
       : { subscribed: false, unsubscribedAt: pref.unsubscribedAt ?? now, unsubscribeReason: pref.unsubscribeReason ?? "user" },
   });
   if (!resubscribe) {
-    await prisma.nudgeSend.updateMany({
-      where: { userId: pref.userId, unsubscribedAt: null, status: { in: ["sent", "delivered"] } },
-      data: { unsubscribedAt: now },
+    const latest = await prisma.nudgeSend.findFirst({
+      where: { userId: pref.userId, status: { in: ["sent", "delivered"] } },
+      orderBy: { sentAt: "desc" },
+      select: { id: true, unsubscribedAt: true },
     });
+    if (latest && !latest.unsubscribedAt) {
+      await prisma.nudgeSend.update({ where: { id: latest.id }, data: { unsubscribedAt: now } });
+    }
   }
   return c.json({ ok: true, subscribed: updated.subscribed, email: maskEmail(updated.email) });
 }
 
-email.get("/unsubscribe", handleUnsubscribe);
+// A bare GET (link scanners, mail-client previews) only lands on the confirm
+// page; the page's button and the RFC 8058 POST below are what unsubscribe.
+email.get("/unsubscribe", (c) => {
+  const signed = c.req.query("t");
+  const target = `${frontendUrl()}/unsubscribe${signed ? `?t=${encodeURIComponent(signed)}` : ""}`;
+  c.header("Cache-Control", "no-store");
+  return c.redirect(target, 302);
+});
 // RFC 8058: mail clients POST `List-Unsubscribe=One-Click` to this URL.
 email.post("/unsubscribe", handleUnsubscribe);
 

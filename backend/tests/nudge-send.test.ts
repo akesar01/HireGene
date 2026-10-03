@@ -23,7 +23,7 @@ import { prisma } from "../src/lib/prisma";
 import { getProfilesCollection } from "../src/lib/mongo";
 import { fetchClerkUsers } from "../src/lib/clerk-users";
 import type { EmailProvider, OutgoingEmail } from "../src/lib/email";
-import { isoWeekKey, runCampaign, scheduledCampaignFor, sendTestNudge, type RunCampaignResult } from "../src/lib/nudge-send";
+import { isoWeekKey, nextNudgeTick, runCampaign, scheduledCampaignFor, sendTestNudge, type RunCampaignResult } from "../src/lib/nudge-send";
 
 const db = prisma as unknown as ReturnType<typeof import("./helpers/fake-prisma").createFakePrisma>;
 const NOW = new Date("2026-09-28T02:30:00Z"); // a Monday
@@ -319,5 +319,13 @@ describe("schedule helpers", () => {
     expect(scheduledCampaignFor(new Date("2026-09-28T02:30:00Z"))).toMatchObject({ key: "weekly-2026-W40", kind: "weekly" });
     expect(scheduledCampaignFor(new Date("2026-09-29T02:30:00Z"))).toMatchObject({ key: "daily-2026-09-29", kind: "daily" });
     expect(isoWeekKey(new Date("2027-01-01T00:00:00Z"))).toBe("2026-W53");
+  });
+
+  it("finds the next 02:30 UTC tick: today when before it, otherwise tomorrow", () => {
+    expect(nextNudgeTick(new Date("2026-09-28T01:00:00Z")).toISOString()).toBe("2026-09-28T02:30:00.000Z");
+    expect(nextNudgeTick(new Date("2026-09-28T02:30:00Z")).toISOString()).toBe("2026-09-29T02:30:00.000Z");
+    expect(nextNudgeTick(new Date("2026-09-27T23:00:00Z")).toISOString()).toBe("2026-09-28T02:30:00.000Z");
+    expect(scheduledCampaignFor(nextNudgeTick(new Date("2026-09-27T23:00:00Z")))).toMatchObject({ key: "weekly-2026-W40", kind: "weekly" });
+    expect(scheduledCampaignFor(nextNudgeTick(new Date("2026-09-28T10:00:00Z")))).toMatchObject({ key: "daily-2026-09-29", kind: "daily" });
   });
 });

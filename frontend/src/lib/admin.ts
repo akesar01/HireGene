@@ -142,7 +142,8 @@ export interface Schedule {
   paused: boolean;
   cron: string;
   description: string;
-  todayWouldRun: { key: string; name: string; kind: string };
+  nextTickAt: string;
+  nextTickWouldRun: { key: string; name: string; kind: string };
 }
 
 export interface CampaignVariantInput {

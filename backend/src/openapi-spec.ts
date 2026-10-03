@@ -135,18 +135,18 @@ function buildOpenApiSpec(baseUrl: string) {
     },
     "/api/email/unsubscribe": {
       get: {
-        summary: "One-click unsubscribe (signed token, no login)",
+        summary: "Redirects to the unsubscribe confirm page on the site; does not change anything",
+        tags: ["Email"],
+        parameters: [{ name: "t", in: "query", required: true, schema: { type: "string" }, description: "Signed token from the email footer" }],
+        responses: { "302": { description: "Redirect to FRONTEND_URL/unsubscribe?t=<token>" } },
+      },
+      post: {
+        summary: "One-click unsubscribe (signed token, no login); RFC 8058 List-Unsubscribe-Post target",
         tags: ["Email"],
         parameters: [
           { name: "t", in: "query", required: true, schema: { type: "string" }, description: "Signed token from the email footer" },
           { name: "action", in: "query", schema: { type: "string", enum: ["resubscribe"] } },
         ],
-        responses: { "200": { description: "Subscription state" }, "400": { description: "Invalid token" } },
-      },
-      post: {
-        summary: "RFC 8058 List-Unsubscribe-Post target (same behaviour as GET)",
-        tags: ["Email"],
-        parameters: [{ name: "t", in: "query", required: true, schema: { type: "string" } }],
         responses: { "200": { description: "Subscription state" }, "400": { description: "Invalid token" } },
       },
     },

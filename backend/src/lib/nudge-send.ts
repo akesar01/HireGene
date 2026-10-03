@@ -272,6 +272,15 @@ export function isoWeekKey(date: Date): string {
   return `${d.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
 }
 
+export const NUDGE_CRON_UTC = { hour: 2, minute: 30 } as const;
+
+/** The next 02:30 UTC cron firing strictly after `now`. Pure. */
+export function nextNudgeTick(now: Date): Date {
+  const tick = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), NUDGE_CRON_UTC.hour, NUDGE_CRON_UTC.minute));
+  if (tick.getTime() <= now.getTime()) tick.setUTCDate(tick.getUTCDate() + 1);
+  return tick;
+}
+
 /** The campaign the daily cron should run today: weekly on Mondays, daily otherwise. Pure. */
 export function scheduledCampaignFor(now: Date): { key: string; name: string; kind: "weekly" | "daily" } {
   if (now.getUTCDay() === 1) {

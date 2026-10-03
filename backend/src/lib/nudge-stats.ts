@@ -3,6 +3,7 @@
 
 import { MS_PER_DAY, activeJobWhere } from "./job-expiry.js";
 import { getProfilesCollection } from "./mongo.js";
+import { listEligibleUserIds } from "./nudge-send.js";
 import { prisma } from "./prisma.js";
 
 // ─── Subscribers ─────────────────────────────────────────────────────────────
@@ -20,16 +21,19 @@ export interface SubscriberStats {
 export async function subscriberStats(now = new Date()): Promise<SubscriberStats> {
   const collection = await getProfilesCollection();
   const weekAgo = new Date(now.getTime() - 7 * MS_PER_DAY);
-  const [eligible, newThisWeek] = collection
-    ? await Promise.all([
-        collection.countDocuments({ filterSummary: { $exists: true } }),
-        collection.countDocuments({ filterSummary: { $exists: true }, createdAt: { $gte: weekAgo } }),
-      ])
-    : [0, 0];
+  const [eligibleIds, newThisWeek] = await Promise.all([
+    listEligibleUserIds(),
+    collection ? collection.countDocuments({ filterSummary: { $exists: true }, createdAt: { $gte: weekAgo } }) : 0,
+  ]);
+  const eligible = eligibleIds.length;
 
-  const prefs = await prisma.emailPreference.findMany({
-    select: { subscribed: true, frequency: true, pausedUntil: true, unsubscribeReason: true },
-  });
+  const prefs =
+    eligibleIds.length > 0
+      ? await prisma.emailPreference.findMany({
+          where: { userId: { in: eligibleIds } },
+          select: { subscribed: true, frequency: true, pausedUntil: true, unsubscribeReason: true },
+        })
+      : [];
   let unsubscribed = 0;
   let paused = 0;
   let daily = 0;
@@ -111,7 +115,7 @@ type SendLite = {
   unsubscribedAt: Date | null;
 };
 
-/** Pure: fold send rows into counts. Rates use delivered as the denominator, else sent. */
+/** Pure: fold send rows into counts. Open and click rates are per sent email. */
 export function foldSendCounts(rows: SendLite[]): SendCounts {
   const c = emptyCounts();
   for (const r of rows) {
@@ -145,10 +149,9 @@ export function foldSendCounts(rows: SendLite[]): SendCounts {
     if (r.complainedAt) c.complained += 1;
     if (r.unsubscribedAt) c.unsubscribed += 1;
   }
-  const denominator = c.delivered > 0 ? c.delivered : c.sent;
-  if (denominator > 0) {
-    c.openRate = Math.round((c.opened / denominator) * 1000) / 10;
-    c.clickRate = Math.round((c.clicked / denominator) * 1000) / 10;
+  if (c.sent > 0) {
+    c.openRate = Math.round((c.opened / c.sent) * 1000) / 10;
+    c.clickRate = Math.round((c.clicked / c.sent) * 1000) / 10;
   }
   return c;
 }
@@ -274,7 +277,7 @@ export async function jobStats(now = new Date(), days = 14): Promise<JobStats> {
     prisma.job.groupBy({ by: ["recruiterId"], where: activeJobWhere(now), _count: { _all: true } }),
     prisma.recruiter.findMany({ select: { id: true, name: true, active: true, lastScrapedAt: true } }),
     topClickedJobs(10),
-    prisma.nudgeClick.count(),
+    prisma.nudgeClick.count({ where: { jobId: { not: null } } }),
   ]);
 
   const liveByLevel: Record<string, number> = {};

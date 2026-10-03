@@ -8,6 +8,7 @@ import {
   continueCampaignLater,
   createManualCampaign,
   isSchedulePaused,
+  nextNudgeTick,
   previewNudgeForUser,
   runCampaign,
   scheduledCampaignFor,
@@ -114,13 +115,13 @@ nudges.post("/test", async (c) => {
 
 // GET /api/admin/nudges/schedule
 nudges.get("/schedule", async (c) => {
-  const now = new Date();
-  const next = scheduledCampaignFor(now);
+  const tick = nextNudgeTick(new Date());
   return c.json({
     paused: await isSchedulePaused(),
     cron: "30 2 * * *",
     description: "Daily at 02:30 UTC (08:00 IST). Mondays send the weekly campaign to everyone; other days send only to users who chose daily.",
-    todayWouldRun: next,
+    nextTickAt: tick.toISOString(),
+    nextTickWouldRun: scheduledCampaignFor(tick),
   });
 });
 

@@ -135,38 +135,61 @@ describe("POST /api/email/webhook", () => {
 });
 
 describe("one-click unsubscribe", () => {
-  it("unsubscribes with a valid signed token, via GET and the RFC 8058 POST", async () => {
+  it("GET only redirects to the confirm page with the same token and changes nothing", async () => {
     const token = signUnsubscribeToken("stored-token-1");
     const res = await app.request(`/api/email/unsubscribe?t=${encodeURIComponent(token)}`);
-    expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toMatchObject({ ok: true, subscribed: false, email: "a*@example.com" });
-    const pref = await db.emailPreference.findUnique({ where: { userId: "user_1" } });
-    expect(pref!.subscribed).toBe(false);
-    expect(pref!.unsubscribeReason).toBe("user");
-    expect((await db.nudgeSend.findUnique({ where: { id: "send_1" } }))!.unsubscribedAt).toBeInstanceOf(Date);
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(`https://skiptheboard.in/unsubscribe?t=${encodeURIComponent(token)}`);
+    expect((await db.emailPreference.findUnique({ where: { userId: "user_1" } }))!.subscribed).toBe(true);
+    expect((await db.nudgeSend.findUnique({ where: { id: "send_1" } }))!.unsubscribedAt).toBeNull();
 
-    await db.emailPreference.update({ where: { userId: "user_1" }, data: { subscribed: true, unsubscribedAt: null, unsubscribeReason: null } });
+    const forged = `${Buffer.from("stored-token-1").toString("base64url")}.forgedsignature`;
+    expect((await app.request(`/api/email/unsubscribe?t=${forged}`)).status).toBe(302);
+    expect((await db.emailPreference.findUnique({ where: { userId: "user_1" } }))!.subscribed).toBe(true);
+  });
+
+  it("unsubscribes on the RFC 8058 POST and stamps only the most recent send", async () => {
+    const older = await db.campaign.create({ data: { key: "weekly-2026-W39", name: "W39", kind: "weekly", status: "completed", jobCount: 5 } });
+    await db.nudgeSend.create({
+      data: {
+        id: "send_0",
+        campaignId: older.id,
+        userId: "user_1",
+        email: "a@example.com",
+        status: "delivered",
+        providerMessageId: "msg_0",
+        jobIds: [11],
+        sentAt: new Date(Date.now() - 7 * 86_400_000),
+      },
+    });
+    const token = signUnsubscribeToken("stored-token-1");
     const post = await app.request(`/api/email/unsubscribe?t=${encodeURIComponent(token)}`, {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
       body: "List-Unsubscribe=One-Click",
     });
     expect(post.status).toBe(200);
-    expect((await db.emailPreference.findUnique({ where: { userId: "user_1" } }))!.subscribed).toBe(false);
+    await expect(post.json()).resolves.toMatchObject({ ok: true, subscribed: false, email: "a*@example.com" });
+    const pref = await db.emailPreference.findUnique({ where: { userId: "user_1" } });
+    expect(pref!.subscribed).toBe(false);
+    expect(pref!.unsubscribeReason).toBe("user");
+    expect((await db.nudgeSend.findUnique({ where: { id: "send_1" } }))!.unsubscribedAt).toBeInstanceOf(Date);
+    expect((await db.nudgeSend.findUnique({ where: { id: "send_0" } }))!.unsubscribedAt).toBeNull();
   });
 
-  it("rejects a forged or missing token", async () => {
+  it("rejects a forged or missing token on POST", async () => {
     const forged = `${Buffer.from("stored-token-1").toString("base64url")}.forgedsignature`;
-    expect((await app.request(`/api/email/unsubscribe?t=${forged}`)).status).toBe(400);
-    expect((await app.request("/api/email/unsubscribe")).status).toBe(400);
+    expect((await app.request(`/api/email/unsubscribe?t=${forged}`, { method: "POST" })).status).toBe(400);
+    expect((await app.request("/api/email/unsubscribe", { method: "POST" })).status).toBe(400);
     const unknown = signUnsubscribeToken("not-a-stored-token");
-    expect((await app.request(`/api/email/unsubscribe?t=${encodeURIComponent(unknown)}`)).status).toBe(400);
+    expect((await app.request(`/api/email/unsubscribe?t=${encodeURIComponent(unknown)}`, { method: "POST" })).status).toBe(400);
     expect((await db.emailPreference.findUnique({ where: { userId: "user_1" } }))!.subscribed).toBe(true);
   });
 
   it("can resubscribe from the same link", async () => {
     const token = signUnsubscribeToken("stored-token-1");
-    await app.request(`/api/email/unsubscribe?t=${encodeURIComponent(token)}`);
+    await app.request(`/api/email/unsubscribe?t=${encodeURIComponent(token)}`, { method: "POST" });
+    expect((await db.emailPreference.findUnique({ where: { userId: "user_1" } }))!.subscribed).toBe(false);
     const res = await app.request(`/api/email/unsubscribe?t=${encodeURIComponent(token)}&action=resubscribe`, { method: "POST" });
     await expect(res.json()).resolves.toMatchObject({ ok: true, subscribed: true });
   });
@@ -181,6 +204,22 @@ describe("GET /go/:sendId/:jobId", () => {
     expect(clicks).toHaveLength(1);
     expect(clicks[0]).toMatchObject({ sendId: "send_1", jobId: 23, source: "redirect" });
     expect((await db.nudgeSend.findUnique({ where: { id: "send_1" } }))!.clickedAt).toBeInstanceOf(Date);
+  });
+
+  it("redirects without logging when the job was not part of that send", async () => {
+    await db.job.create({
+      data: { id: 24, recruiterId: 1, title: "SDE 2", company: "Zepto", sourceUrl: "https://www.linkedin.com/posts/zepto-sde2", postedAt: new Date(), seniority: "mid", source: "linkedin", roleFamily: "engineering" },
+    });
+    const res = await app.request("/go/send_1/24");
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("https://www.linkedin.com/posts/zepto-sde2");
+    expect(await db.nudgeClick.count({})).toBe(0);
+    expect((await db.nudgeSend.findUnique({ where: { id: "send_1" } }))!.clickedAt).toBeNull();
+
+    const missing = await app.request("/go/send_1/999999");
+    expect(missing.status).toBe(302);
+    expect(missing.headers.get("location")).toMatch(/^https:\/\/skiptheboard\.in\/\?utm_source=nudge/);
+    expect(await db.nudgeClick.count({})).toBe(0);
   });
 
   it("falls back to the feed for unknown ids without logging", async () => {

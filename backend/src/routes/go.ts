@@ -1,5 +1,6 @@
-// Click redirect for email links: /go/<sendId>/<jobId> logs the click and
-// 302s to the job's original post. Unknown ids fall back to the feed.
+// Click redirect for email links: /go/<sendId>/<jobId> logs the click when
+// that job was in that send, then 302s to the job's original post. Unknown
+// jobs fall back to the feed.
 
 import { Hono } from "hono";
 import { prisma } from "../lib/prisma.js";
@@ -14,11 +15,11 @@ go.get("/:sendId/:jobId", async (c) => {
   if (!sendId || !Number.isInteger(jobId) || jobId <= 0) return c.redirect(fallback, 302);
 
   const [send, job] = await Promise.all([
-    prisma.nudgeSend.findUnique({ where: { id: sendId }, select: { id: true, clickedAt: true } }),
+    prisma.nudgeSend.findUnique({ where: { id: sendId }, select: { id: true, clickedAt: true, jobIds: true } }),
     prisma.job.findUnique({ where: { id: jobId }, select: { sourceUrl: true } }),
   ]);
 
-  if (send) {
+  if (send && send.jobIds.includes(jobId)) {
     const now = new Date();
     await prisma.$transaction([
       prisma.nudgeClick.create({ data: { sendId: send.id, jobId, source: "redirect", url: c.req.url.slice(0, 2000) } }),

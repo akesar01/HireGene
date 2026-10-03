@@ -59,7 +59,7 @@ const SENIOR_TITLE_RE =
 // A years figure counts only as an "N+" form or beside an experience cue in
 // the same clause: "5+ years", "7-12 YOE", "minimum 6 yrs", "at least 5 years
 // of experience". "a fintech with 12 years in market" does not count.
-const YEARS_RE = /\b(\d{1,2})\s*(\+)?(?:\s*(?:-|–|to)\s*(\d{1,2}))?\s*(\+)?\s*(?:years?|yrs?|yoe)\b/gi;
+const YEARS_RE = /(?<![\d.])(\d{1,2})\s*(\+)?(?:\s*(?:-|–|to)\s*(\d{1,2}))?\s*(\+)?\s*(?:years?|yrs?|yoe)\b/gi;
 const EXPERIENCE_CUE_RE = /\bexperience|\bexp\b|\byoe\b|\bminimum\b|\bmin\b|\bat\s?least\b/i;
 const ABBREVIATION_PERIOD_RE = /\b(exp|min|yrs?)\.(?=\s|$)/gi;
 const CLAUSE_BREAK_RE = /\.(?=\s|$)|[;|\n•·]/;
@@ -167,14 +167,19 @@ const LOCATION_RE =
   /bangalore|bengaluru|hyderabad|pune|delhi|ncr|gurgaon|gurugram|noida|mumbai|chennai|kolkata|india|remote|hybrid|on-?site|in-?office|wfh/i;
 const BULLET_MAX = 160;
 
-/** First two bullets, preferring those that state years or a location. */
+/** Any "N years / yrs / YOE" phrase, with or without an experience cue. */
+export function mentionsYears(text: string): boolean {
+  return new RegExp(YEARS_RE.source, "i").test(text);
+}
+
+/** First two bullets, preferring those that mention years or a location. */
 export function pickBullets(description: string[], count = 2): string[] {
   const scored = (description ?? [])
     .map((text, index) => ({ text: text.trim(), index }))
     .filter((b) => b.text.length > 0)
     .map((b) => {
       let score = 0;
-      if (minimumYears(b.text) !== null) score += 2;
+      if (mentionsYears(b.text)) score += 2;
       if (LOCATION_RE.test(b.text)) score += 1;
       return { ...b, score };
     });

@@ -56,6 +56,12 @@ describe("senior override", () => {
     expect(minimumYears("founded 20 years ago; 3+ years of experience required")).toBe(3);
   });
 
+  it("does not read a decimal figure from its fractional part", () => {
+    expect(minimumYears("1.5+ years of experience")).toBeNull();
+    expect(minimumYears("2.5 years of experience in Java")).toBeNull();
+    expect(minimumYears("1.5-3 years of experience")).toBe(3);
+  });
+
   it("flags SDE III and 5+ years as senior even when stored as mid", () => {
     expect(isSeniorRole({ title: "SDE III – Backend", description: [] })).toBe(true);
     expect(isSeniorRole({ title: "Backend Engineer", description: ["7-12 YOE", "Hybrid in Delhi NCR"] })).toBe(true);
@@ -69,6 +75,8 @@ describe("senior override", () => {
     expect(effectiveSeniority({ title: "DevOps Engineer II", description: ["3–5 years of experience"], seniority: "mid" })).toBe("mid");
     expect(effectiveSeniority({ title: "Associate SDE", description: ["Looking for freshers"], seniority: "intern" })).toBe("intern");
     expect(effectiveSeniority({ title: "SDE 1", description: ["a fintech with 12 years in market", "Bangalore"], seniority: "junior" })).toBe("junior");
+    expect(effectiveSeniority({ title: "SDE 1", description: ["1.5+ years of experience"], seniority: "junior" })).toBe("junior");
+    expect(effectiveSeniority({ title: "SDE 1", description: ["2.5 years of experience in Java"], seniority: "junior" })).toBe("junior");
   });
 
   it("does not demote a role that is already senior", () => {
@@ -106,6 +114,12 @@ describe("pickBullets", () => {
       "1-3 years of experience as a Software Development Engineer (SDE).",
       "Join us in Bangalore.",
     ]);
+  });
+
+  it("prefers any years mention for bullets, even one that does not lift seniority", () => {
+    const description = ["Great culture", "5-8 years in backend", "Bangalore office", "Experience: 3+ years"];
+    expect(pickBullets(description)).toEqual(["5-8 years in backend", "Experience: 3+ years"]);
+    expect(effectiveSeniority({ title: "SDE 1", description: ["5-8 years in backend"], seniority: "junior" })).toBe("junior");
   });
 
   it("falls back to the first two bullets", () => {

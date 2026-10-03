@@ -46,13 +46,13 @@ export default function SendPanel({ getToken }: { getToken: () => Promise<string
   const selectedCampaign = campaignId === "" ? null : campaignId;
 
   const loadPreview = useCallback(
-    async (user: NudgeUser) => {
+    async (user: NudgeUser, campaign: number | null = selectedCampaign) => {
       setSelected(user);
       setPreview(null);
       setPreviewLoading(true);
       try {
         const t = await getToken();
-        setPreview(await adminApi.preview(t, user.userId, selectedCampaign));
+        setPreview(await adminApi.preview(t, user.userId, campaign));
       } catch (e) {
         fail(e);
       } finally {
@@ -61,6 +61,12 @@ export default function SendPanel({ getToken }: { getToken: () => Promise<string
     },
     [getToken, selectedCampaign],
   );
+
+  function changeCampaign(value: string) {
+    const next = value === "" ? "" : Number(value);
+    setCampaignId(next);
+    if (selected) loadPreview(selected, next === "" ? null : next);
+  }
 
   async function togglePause() {
     if (!schedule) return;
@@ -134,7 +140,7 @@ export default function SendPanel({ getToken }: { getToken: () => Promise<string
               </div>
               <p className="text-xs text-muted">{schedule.description}</p>
               <p className="text-xs text-muted">
-                Next tick would run: <span className="text-foreground">{schedule.todayWouldRun.name}</span> ({schedule.todayWouldRun.kind}).
+                Next tick ({fmtDate(schedule.nextTickAt)}) would run: <span className="text-foreground">{schedule.nextTickWouldRun.name}</span> ({schedule.nextTickWouldRun.kind}).
               </p>
               <Button onClick={togglePause} disabled={busy === "schedule"} variant={schedule.paused ? "primary" : "secondary"}>
                 {schedule.paused ? "Resume schedule" : "Pause schedule"}
@@ -149,7 +155,7 @@ export default function SendPanel({ getToken }: { getToken: () => Promise<string
           <div className="space-y-3 text-sm">
             <label className="block text-xs font-medium text-foreground">
               Campaign
-              <select value={campaignId} onChange={(e) => setCampaignId(e.target.value === "" ? "" : Number(e.target.value))} className={`${inputClass} mt-1`}>
+              <select value={campaignId} onChange={(e) => changeCampaign(e.target.value)} className={`${inputClass} mt-1`}>
                 <option value="">New manual campaign (everyone, default template)</option>
                 {campaigns.map((c) => (
                   <option key={c.id} value={c.id}>

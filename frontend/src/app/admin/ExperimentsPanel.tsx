@@ -190,7 +190,7 @@ export default function ExperimentsPanel({ getToken }: { getToken: () => Promise
                   <th className="pb-2 pr-4 font-semibold">Experiment</th>
                   <th className="pb-2 pr-4 font-semibold">Status</th>
                   <th className="pb-2 pr-4 font-semibold">Arms</th>
-                  <th className="pb-2 pr-4 font-semibold">Recipients</th>
+                  <th className="pb-2 pr-4 font-semibold">Assigned</th>
                   <th className="pb-2 pr-4 font-semibold">Created</th>
                   <th className="pb-2 font-semibold"></th>
                 </tr>
