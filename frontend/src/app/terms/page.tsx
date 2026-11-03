@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { OG_IMAGE } from "@/lib/og-image";
 import Link from "next/link";
 import Header from "@/components/Header";
 
@@ -12,6 +13,7 @@ export const metadata: Metadata = {
     description:
       "Rules for using SkipTheBoard — community-driven job feed. Free service, user-generated content, no warranty.",
     url: "https://skiptheboard.in/terms",
+    images: [OG_IMAGE],
   },
 };
 
