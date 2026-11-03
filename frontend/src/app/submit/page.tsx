@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { OG_IMAGE } from "@/lib/og-image";
 import SubmitForm from "./SubmitForm";
 
 export const metadata: Metadata = {
@@ -11,6 +12,7 @@ export const metadata: Metadata = {
     description:
       "Submit a hiring manager's LinkedIn or X profile to SkipTheBoard. We'll review and start tracking their hiring posts.",
     url: "https://skiptheboard.in/submit",
+    images: [OG_IMAGE],
   },
 };
 

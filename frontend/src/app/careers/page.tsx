@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { OG_IMAGE } from "@/lib/og-image";
 import Link from "next/link";
 import Header from "@/components/Header";
 
@@ -12,6 +13,7 @@ export const metadata: Metadata = {
     description:
       "We're hiring a marketing intern. Join SkipTheBoard and help us fix tech hiring.",
     url: "https://skiptheboard.in/careers",
+    images: [OG_IMAGE],
   },
 };
 

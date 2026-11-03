@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { OG_IMAGE } from "@/lib/og-image";
 import Link from "next/link";
 import { JOB_EXPIRY_DAYS } from "@/lib/config";
 import Header from "@/components/Header";
@@ -13,6 +14,7 @@ export const metadata: Metadata = {
     description:
       "We watch real hiring managers across LinkedIn and X. Every post they make gets captured here before it vanishes.",
     url: "https://skiptheboard.in/about",
+    images: [OG_IMAGE],
   },
 };
 

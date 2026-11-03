@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { OG_IMAGE } from "@/lib/og-image";
 import Link from "next/link";
 import { JOB_EXPIRY_DAYS } from "@/lib/config";
 import Header from "@/components/Header";
@@ -12,6 +13,7 @@ export const metadata: Metadata = {
     title: "Privacy Policy | SkipTheBoard",
     description: "What we store, who processes it, and how to unsubscribe or delete your data.",
     url: "https://skiptheboard.in/privacy",
+    images: [OG_IMAGE],
   },
 };
 
