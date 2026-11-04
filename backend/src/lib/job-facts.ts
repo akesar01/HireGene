@@ -72,10 +72,21 @@ const CITY_PATTERNS = CITIES.map((c) => ({
 }));
 
 const INDIA_RE = /\bindia\b/i;
-// "US"/"USA" only in capitals: lowercase "us" is ordinary English ("join us").
-const US_CODE_RE = /\bU\.S\.(?:A\.)?|\bUSA?\b/;
+// "USA" only in capitals. A bare "US" ("DM US", "US clients") is not a place;
+// it counts only after location phrasing such as "based in the US", and only in
+// capitals, since lowercase "us" is ordinary English ("join us").
+const USA_RE = /\bU\.S\.A\.|\bUSA\b/;
+const US_AS_PLACE_RE = /\b(?:based|located|on-?site|in|from|within|or)\s+(?:the\s+)?(US|U\.S\.)(?![\w.])/gi;
 const US_PLACE_RE =
   /\bunited states\b|\bseattle\b|\bsan francisco\b|\bbay area\b|\bnew york\b|\bsunnyvale\b|\bmountain view\b|\bpalo alto\b|\baustin\b/i;
+
+function pointsAtUS(text: string): boolean {
+  return (
+    USA_RE.test(text) ||
+    US_PLACE_RE.test(text) ||
+    [...text.matchAll(US_AS_PLACE_RE)].some((m) => m[1] === m[1].toUpperCase())
+  );
+}
 
 const INTERN_TITLE_RE = /\bintern(?:ship)?s?\b/i;
 const PART_TIME_RE = /\bpart[\s-]?time\b/i;
@@ -104,7 +115,7 @@ export function extractEmploymentTypes(title: string, text: string): EmploymentT
 
 export function jobFacts(job: JobFactsInput): JobFacts {
   const text = [job.title, ...(job.description ?? []), job.rawText ?? ""].join("\n");
-  if (US_CODE_RE.test(text) || US_PLACE_RE.test(text)) {
+  if (pointsAtUS(text)) {
     return { locations: [], country: null, employmentTypes: extractEmploymentTypes(job.title, text) };
   }
   const locations = extractLocations(text);

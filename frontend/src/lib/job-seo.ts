@@ -42,10 +42,10 @@ export function jobUrl(job: Pick<Job, "id" | "title" | "company" | "locations">)
   return `${SITE_URL}${jobPath(job)}`;
 }
 
-/** The job id at the end of a slug; the words before it are only for people. */
 /** Job ids are Postgres Int4. */
 const MAX_JOB_ID = 2_147_483_647;
 
+/** The job id at the end of a slug; the words before it are only for people. */
 export function parseJobSlug(slug: string): number | null {
   const match = /(?:^|-)([1-9]\d{0,9})$/.exec(slug);
   const id = match ? Number(match[1]) : null;

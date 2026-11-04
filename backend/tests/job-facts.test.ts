@@ -83,7 +83,20 @@ describe("jobFacts", () => {
     expect(jobFacts(job("Remote role in India, open to applicants from India, for us only")).country).toBe("IN");
   });
 
-  it("still treats uppercase US / USA as a US signal", () => {
+  it("does not read a bare uppercase US as the job's place", () => {
+    for (const text of ["WE'RE HIRING in Bengaluru! DM US", "JOIN US in Bengaluru"]) {
+      const facts = jobFacts(job(text));
+      expect(facts.locations.map((l) => l.city)).toEqual(["Bengaluru"]);
+      expect(facts.country).toBe("IN");
+    }
+    const pune = jobFacts(job("Backend engineer, onsite Pune, working with US clients / US shift"));
+    expect(pune.locations.map((l) => l.city)).toEqual(["Pune"]);
+    expect(pune.country).toBe("IN");
+  });
+
+  it("treats USA and US location phrasing as a US signal", () => {
+    expect(jobFacts(job("Remote, based in the US")).country).toBeNull();
+    expect(jobFacts(job("Bangalore team, role located in the U.S.")).locations).toEqual([]);
     expect(jobFacts(job("Remote in India or the US")).country).toBeNull();
     expect(jobFacts(job("Pune or USA, remote")).locations).toEqual([]);
     expect(jobFacts(job("Bangalore or U.S.A.")).country).toBeNull();
