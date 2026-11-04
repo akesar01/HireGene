@@ -15,12 +15,20 @@ interface JobCardProps {
   matchReason?: string;
 }
 
+// The whole card opens the job page: the title link's ::after stretches over the
+// card, so it is one real link (keyboard, middle-click, tap). Controls sit above
+// it: the upvote column, earlier in the DOM, needs a z-index; the badge and the
+// actions row, later in the DOM, only need to be positioned. No z-index wraps the
+// actions, so the DM and connection-note modals keep their own fixed z-50; the
+// row lets clicks in the gaps between its controls fall through to the card.
 export default function JobCard({ job, matchScore, matchReason }: JobCardProps) {
   return (
-    <article className="bg-card-bg border border-card-border rounded-xl p-4 shadow-card hover:shadow-card-hover hover:border-muted-light/40 transition-all duration-200 ease-out">
+    <article className="relative bg-card-bg border border-card-border rounded-xl p-4 shadow-card hover:shadow-card-hover hover:border-muted-light/40 transition-all duration-200 ease-out">
       <div className="flex gap-4">
         {/* Upvote button */}
-        <UpvoteButton jobId={job.id} initialScore={job.score} />
+        <div className="relative z-[1]">
+          <UpvoteButton jobId={job.id} initialScore={job.score} />
+        </div>
 
         {/* Main content */}
         <div className="flex-1 min-w-0">
@@ -42,12 +50,18 @@ export default function JobCard({ job, matchScore, matchReason }: JobCardProps) 
           {/* Job title + match badge */}
           <div className="mt-3 flex items-center gap-2 flex-wrap">
             <h3 className="text-base font-bold text-foreground leading-snug">
-              <Link href={jobPath(job)} prefetch={false} className="hover:text-accent transition-colors">
+              <Link
+                href={jobPath(job)}
+                prefetch={false}
+                className="hover:text-accent transition-colors focus-visible:outline-none! after:absolute after:inset-0 after:rounded-xl after:content-[''] focus-visible:after:ring-2 focus-visible:after:ring-accent"
+              >
                 {job.title}
               </Link>
             </h3>
             {matchScore !== undefined && (
-              <MatchBadge score={matchScore} reason={matchReason} />
+              <span className="relative">
+                <MatchBadge score={matchScore} reason={matchReason} />
+              </span>
             )}
           </div>
 
@@ -85,7 +99,7 @@ export default function JobCard({ job, matchScore, matchReason }: JobCardProps) 
           </div>
 
           {/* Actions */}
-          <div className="mt-3 flex items-center gap-3 flex-wrap">
+          <div className="relative mt-3 flex items-center gap-3 flex-wrap pointer-events-none *:pointer-events-auto">
             <MessageButton job={job} />
             {job.source === "linkedin" && <ConnectNoteButton job={job} />}
             <AppliedButton jobId={job.id} />
