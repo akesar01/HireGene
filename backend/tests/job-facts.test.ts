@@ -39,6 +39,15 @@ describe("extractEmploymentTypes", () => {
     expect(extractEmploymentTypes("Backend Engineer", "We build tools for engineers")).toEqual([]);
   });
 
+  it("reads full-time and part-time even when the next word is glued on", () => {
+    expect(extractEmploymentTypes("Data Engineer", "Employment Type: Full-timeWe are looking for a Data Engineer")).toEqual([
+      "FULL_TIME",
+    ]);
+    expect(extractEmploymentTypes("Data Engineer", "FULL TIME, Pune")).toEqual(["FULL_TIME"]);
+    expect(extractEmploymentTypes("Data Engineer", "Part-timeRemote")).toEqual(["PART_TIME"]);
+    expect(extractEmploymentTypes("Data Engineer", "We value full-timers")).toEqual([]);
+  });
+
   it("marks interns from the title, not from a passing mention", () => {
     expect(extractEmploymentTypes("SDE Intern", "Summer internship")).toEqual(["INTERN"]);
     expect(extractEmploymentTypes("Backend Engineer", "Started as an intern here myself")).toEqual([]);

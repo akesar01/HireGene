@@ -21,9 +21,19 @@ function slugify(value: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
+// Ingest sometimes stores a role, a team or a college in the company slot.
+// Those are not employers, so they must never reach hiringOrganization.
+const ROLE_WORD_RE =
+  /^(?:(?:co[\s-]?)?founder|ceo|cto|coo|cfo|cxo|vp|director|head|manager|hiring manager|recruiter|hr|talent acquisition)$/i;
+const NOT_AN_EMPLOYER_RE = /\b(?:across|team|university|college)\b/i;
+
 export function isKnownCompany(company: string | null | undefined): company is string {
   const name = (company ?? "").trim();
-  return name !== "" && name.toLowerCase() !== "unknown";
+  if (name === "" || name.toLowerCase() === "unknown") return false;
+  if (name.replace(/[^\p{L}\p{N}]/gu, "").length <= 2) return false;
+  if (NOT_AN_EMPLOYER_RE.test(name)) return false;
+  const parts = name.split(/\s*(?:&|,|\/|\band\b)\s*/i).filter(Boolean);
+  return !parts.every((part) => ROLE_WORD_RE.test(part));
 }
 
 /** title-company-city-id, e.g. senior-backend-engineer-razorpay-bengaluru-42. */

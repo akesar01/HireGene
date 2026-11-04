@@ -90,10 +90,12 @@ function pointsAtUS(text: string): boolean {
 }
 
 const INTERN_TITLE_RE = /\bintern(?:ship)?s?\b/i;
-const PART_TIME_RE = /\bpart[\s-]?time\b/i;
+// Scraped text sometimes loses the space after a phrase ("Full-timeWe are"), so
+// the phrase may run straight into a capital letter but not into lowercase.
+const PART_TIME_RE = /\b(?:[Pp]art[\s-]?[Tt]ime|PART[\s-]?TIME)(?![a-z])/;
 const CONTRACT_RE =
   /\bcontract[\s-]to[\s-]hire\b|\bc2h\b|\bfreelance\b|\bcontract(?:ual)?\s+(?:role|position|basis|opening|job|engagement)\b|\bon\s+(?:a\s+)?contract\b/i;
-const FULL_TIME_RE = /\bfull[\s-]?time\b/i;
+const FULL_TIME_RE = /\b(?:[Ff]ull[\s-]?[Tt]ime|FULL[\s-]?TIME)(?![a-z])/;
 
 /** Cities the text names, in order of first mention. */
 export function extractLocations(text: string): JobLocation[] {

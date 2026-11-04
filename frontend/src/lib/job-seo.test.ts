@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { JobDetail } from "./data";
 import {
   buildJobPostingJsonLd,
+  isKnownCompany,
   jobDescriptionHtml,
   jobMetaDescription,
   jobSlug,
@@ -52,6 +53,7 @@ describe("jobSlug / parseJobSlug", () => {
 
   it("leaves out an unknown company and a missing city", () => {
     expect(jobSlug(detail({ company: "Unknown", locations: [] }))).toBe("senior-backend-engineer-42");
+    expect(jobSlug(detail({ company: "Co-Founder" }))).toBe("senior-backend-engineer-bengaluru-42");
   });
 
   it("keeps long slugs short and still parseable", () => {
@@ -143,6 +145,28 @@ describe("buildJobPostingJsonLd", () => {
   it("is skipped when the company is unknown", () => {
     expect(buildJobPostingJsonLd(detail({ company: "Unknown" }), NOW)).toBeNull();
     expect(buildJobPostingJsonLd(detail({ company: "  " }), NOW)).toBeNull();
+  });
+
+  it("is skipped when the stored company is a role, team, college or fragment", () => {
+    for (const company of [
+      "Co-Founder",
+      "Co-founder",
+      "Founder",
+      "CEO",
+      "Founder & CEO",
+      "my team",
+      "Thoughtworks India across Engineering",
+      "Bharathiyar university",
+      "IIT Delhi college",
+      "DE",
+      "X",
+    ]) {
+      expect(isKnownCompany(company), company).toBe(false);
+      expect(buildJobPostingJsonLd(detail({ company }), NOW), company).toBeNull();
+    }
+    for (const company of ["Razorpay", "IITBase", "UST", "Thoughtworks", "EPAM Systems", "Founders Fund"]) {
+      expect(isKnownCompany(company), company).toBe(true);
+    }
   });
 
   it("is skipped when there is no location to state", () => {
