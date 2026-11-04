@@ -106,6 +106,9 @@ describe("jobFacts", () => {
 
   it("treats USA and US location phrasing as a US signal", () => {
     expect(jobFacts(job("Onsite role in the US.")).country).toBeNull();
+    const dotted = jobFacts(job("Senior engineer, based in the U.S. Our Bangalore team supports infra."));
+    expect(dotted.locations).toEqual([]);
+    expect(dotted.country).toBeNull();
     expect(jobFacts(job("Pune or Bangalore, or in the US only")).locations).toEqual([]);
     expect(jobFacts(job("Remote, based in the US")).country).toBeNull();
     expect(jobFacts(job("Bangalore team, role located in the U.S.")).locations).toEqual([]);
