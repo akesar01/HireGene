@@ -65,6 +65,12 @@ describe("jobSlug / parseJobSlug", () => {
     expect(parseJobSlug("senior-backend-engineer")).toBeNull();
     expect(parseJobSlug("engineer-0")).toBeNull();
   });
+
+  it("rejects ids beyond the Int4 range", () => {
+    expect(parseJobSlug("engineer-2147483647")).toBe(2147483647);
+    expect(parseJobSlug("engineer-2147483648")).toBeNull();
+    expect(parseJobSlug("foo-9999999999")).toBeNull();
+  });
 });
 
 describe("jobValidThrough", () => {

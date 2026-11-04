@@ -67,4 +67,25 @@ describe("jobFacts", () => {
     expect(jobFacts(job("Remote, worldwide")).country).toBeNull();
     expect(jobFacts(job("Remote within India or the United States")).country).toBeNull();
   });
+
+  it("drops Indian cities when the post points at the US", () => {
+    const facts = jobFacts(
+      job("Hiring a backend engineer onsite in San Francisco. Our Bangalore team supports infra."),
+    );
+    expect(facts.locations).toEqual([]);
+    expect(facts.country).toBeNull();
+  });
+
+  it("does not read lowercase \"us\" as the United States", () => {
+    const pune = jobFacts(job("Join us based in Pune"));
+    expect(pune.locations.map((l) => l.city)).toEqual(["Pune"]);
+    expect(pune.country).toBe("IN");
+    expect(jobFacts(job("Remote role in India, open to applicants from India, for us only")).country).toBe("IN");
+  });
+
+  it("still treats uppercase US / USA as a US signal", () => {
+    expect(jobFacts(job("Remote in India or the US")).country).toBeNull();
+    expect(jobFacts(job("Pune or USA, remote")).locations).toEqual([]);
+    expect(jobFacts(job("Bangalore or U.S.A.")).country).toBeNull();
+  });
 });

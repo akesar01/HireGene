@@ -89,6 +89,13 @@ describe("GET /api/posts/:id", () => {
     const res = await app.request("/api/posts/999", { headers });
     expect(res.status).toBe(404);
   });
+
+  it("answers 404 without querying for an id beyond Int4", async () => {
+    const res = await app.request("/api/posts/9999999999", { headers });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: "Job not found" });
+    expect(findUnique).not.toHaveBeenCalled();
+  });
 });
 
 describe("GET /api/posts/recent", () => {

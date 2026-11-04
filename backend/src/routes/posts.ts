@@ -132,14 +132,20 @@ posts.get("/recent", async (c) => {
   });
 });
 
+// Job.id is a Postgres Int4; larger ids cannot exist and Prisma rejects them.
+const MAX_JOB_ID = 2_147_483_647;
+
 // GET /api/posts/:id — one job for its public page. Expired jobs that are not
 // purged yet still answer, flagged expired, so the page can drop them from search.
 posts.get("/:id{[0-9]+}", async (c) => {
   const id = Number(c.req.param("id"));
-  const job = await prisma.job.findUnique({
-    where: { id },
-    include: { recruiter: { select: { linkedinUrl: true } } },
-  });
+  const job =
+    id <= MAX_JOB_ID
+      ? await prisma.job.findUnique({
+          where: { id },
+          include: { recruiter: { select: { linkedinUrl: true } } },
+        })
+      : null;
   if (!job) {
     c.header("Cache-Control", "public, s-maxage=60");
     return c.json({ error: "Job not found" }, 404);

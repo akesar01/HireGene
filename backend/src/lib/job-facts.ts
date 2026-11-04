@@ -72,8 +72,10 @@ const CITY_PATTERNS = CITIES.map((c) => ({
 }));
 
 const INDIA_RE = /\bindia\b/i;
-const US_RE =
-  /\bunited states\b|\bu\.s\.|\busa\b|\bus[\s-]based\b|\bus only\b|\bseattle\b|\bsan francisco\b|\bbay area\b|\bnew york\b|\bsunnyvale\b|\bmountain view\b|\bpalo alto\b|\baustin\b/i;
+// "US"/"USA" only in capitals: lowercase "us" is ordinary English ("join us").
+const US_CODE_RE = /\bU\.S\.(?:A\.)?|\bUSA?\b/;
+const US_PLACE_RE =
+  /\bunited states\b|\bseattle\b|\bsan francisco\b|\bbay area\b|\bnew york\b|\bsunnyvale\b|\bmountain view\b|\bpalo alto\b|\baustin\b/i;
 
 const INTERN_TITLE_RE = /\bintern(?:ship)?s?\b/i;
 const PART_TIME_RE = /\bpart[\s-]?time\b/i;
@@ -102,11 +104,13 @@ export function extractEmploymentTypes(title: string, text: string): EmploymentT
 
 export function jobFacts(job: JobFactsInput): JobFacts {
   const text = [job.title, ...(job.description ?? []), job.rawText ?? ""].join("\n");
+  if (US_CODE_RE.test(text) || US_PLACE_RE.test(text)) {
+    return { locations: [], country: null, employmentTypes: extractEmploymentTypes(job.title, text) };
+  }
   const locations = extractLocations(text);
-  const pointsAtIndia = locations.length > 0 || INDIA_RE.test(text);
   return {
     locations,
-    country: pointsAtIndia && !US_RE.test(text) ? "IN" : null,
+    country: locations.length > 0 || INDIA_RE.test(text) ? "IN" : null,
     employmentTypes: extractEmploymentTypes(job.title, text),
   };
 }
