@@ -94,7 +94,19 @@ describe("jobFacts", () => {
     expect(pune.country).toBe("IN");
   });
 
+  it("does not read US before a noun as the job's place", () => {
+    const pune = jobFacts(job("Backend engineer, onsite Pune, working in US shift"));
+    expect(pune.locations.map((l) => l.city)).toEqual(["Pune"]);
+    expect(pune.country).toBe("IN");
+    const blr = jobFacts(job("Bengaluru office; experience in the US market is a plus"));
+    expect(blr.locations.map((l) => l.city)).toEqual(["Bengaluru"]);
+    expect(blr.country).toBe("IN");
+    expect(jobFacts(job("Remote India, overlap in the US time zone")).country).toBe("IN");
+  });
+
   it("treats USA and US location phrasing as a US signal", () => {
+    expect(jobFacts(job("Onsite role in the US.")).country).toBeNull();
+    expect(jobFacts(job("Pune or Bangalore, or in the US only")).locations).toEqual([]);
     expect(jobFacts(job("Remote, based in the US")).country).toBeNull();
     expect(jobFacts(job("Bangalore team, role located in the U.S.")).locations).toEqual([]);
     expect(jobFacts(job("Remote in India or the US")).country).toBeNull();

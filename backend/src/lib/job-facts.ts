@@ -73,10 +73,11 @@ const CITY_PATTERNS = CITIES.map((c) => ({
 
 const INDIA_RE = /\bindia\b/i;
 // "USA" only in capitals. A bare "US" ("DM US", "US clients") is not a place;
-// it counts only after location phrasing such as "based in the US", and only in
-// capitals, since lowercase "us" is ordinary English ("join us").
+// it counts only after location phrasing such as "based in the US", only when it
+// ends the phrase ("in US shift" is not a place), and only in capitals, since
+// lowercase "us" is ordinary English ("join us").
 const USA_RE = /\bU\.S\.A\.|\bUSA\b/;
-const US_AS_PLACE_RE = /\b(?:based|located|on-?site|in|from|within|or)\s+(?:the\s+)?(US|U\.S\.)(?![\w.])/gi;
+const US_AS_PLACE_RE = /\b(?:based|located|on-?site|in|from|within|or)\s+(?:the\s+)?(US|U\.S\.)(?=\s*(?:$|[,.;:!)/\n]|or\b|and\b|only\b))/gi;
 const US_PLACE_RE =
   /\bunited states\b|\bseattle\b|\bsan francisco\b|\bbay area\b|\bnew york\b|\bsunnyvale\b|\bmountain view\b|\bpalo alto\b|\baustin\b/i;
 
