@@ -88,7 +88,7 @@ Latency: Postgres is in Singapore, so both projects pin functions to `sin1` in t
 
 ## Deployment (Vercel)
 
-Both frontend and backend are deployed on Vercel.
+Both frontend and backend are deployed on Vercel. Merges to `main` auto-deploy (backend, then frontend) via `.github/workflows/deploy.yml` using remote Vercel builds; never switch it to `vercel pull`/`--prebuilt` (prod env vars are sensitive and would build empty). Prisma migrations stay manual, before merging schema changes.
 
 - **Frontend**: Next.js app, auto-detected by Vercel. Custom domain: `https://skiptheboard.in`
 - **Backend**: Hono app deployed as Vercel Serverless Functions via `api/[[...route]].ts` catch-all entry point.
