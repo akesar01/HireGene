@@ -118,6 +118,14 @@ npx vercel env add FRONTEND_URL production
 
 `CLERK_SECRET_KEY` and `MONGODB_URI` are already required for sign-in and profiles; the nudges reuse them for recipient emails and resume profiles.
 
+**`CORS_ORIGIN`** must be a comma-separated list of allowed origins:
+
+```
+https://skiptheboard.in,https://frontend-seven-lilac-71.vercel.app
+```
+
+The backend CORS middleware (`src/index.ts`) splits this value on commas and checks each request's `Origin` header against the list.
+
 ### Region and database connection
 
 Postgres (Supabase) is in Singapore, so both Vercel projects pin their functions to `sin1` (`"regions": ["sin1"]` in `backend/vercel.json` and `frontend/vercel.json`). Hobby allows exactly one function region, and any region may be chosen. Keep the two projects in the same region as the database: from `iad1` every database round trip costs about 230 ms, and moving only one project makes the frontend→backend hop cross the Pacific instead.
@@ -136,14 +144,6 @@ postgresql://postgres.<project-ref>:<password>@aws-0-ap-southeast-1.pooler.supab
 ### Feed caching
 
 The anonymous home feed is cached for 60 s in two places. The frontend's `fetchJobs` (`frontend/src/lib/api.ts`) uses `next: { revalidate: 60 }` when there is no user token. `GET /api/posts/recent` without an `Authorization` header returns `Cache-Control: public, s-maxage=60, stale-while-revalidate=300` with `Vary: x-api-key`. Signed-in requests use `cache: "no-store"` on the frontend and `Cache-Control: private, no-store` on the backend, and Vercel's CDN never caches a request that carries `Authorization`. A new or expired job can therefore take up to about a minute to appear or disappear for anonymous visitors.
-
-**`CORS_ORIGIN`** must be a comma-separated list of allowed origins:
-
-```
-https://skiptheboard.in,https://frontend-seven-lilac-71.vercel.app
-```
-
-The backend CORS middleware (`src/index.ts`) splits this value on commas and checks each request's `Origin` header against the list.
 
 ### Deploy
 

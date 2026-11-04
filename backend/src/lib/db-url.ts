@@ -1,6 +1,6 @@
 // Shapes DATABASE_URL for Prisma on Vercel Functions.
 //
-// Recommended prod shape (see "Database connection" in DEPLOYMENT.md): the
+// Recommended prod shape (see "Region and database connection" in DEPLOYMENT.md): the
 // Supabase session pooler on port 5432 without `pgbouncer=true`, and
 // `connection_limit=5`. Session mode keeps one server connection per client
 // connection, so Prisma's prepared statements work and every query is a single
