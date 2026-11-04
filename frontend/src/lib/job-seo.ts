@@ -25,6 +25,8 @@ function slugify(value: string): string {
 // Those are not employers, so they must never reach hiringOrganization.
 const ROLE_WORD_RE =
   /^(?:(?:co[\s-]?)?founder|ceo|cto|coo|cfo|cxo|vp|director|head|manager|hiring manager|recruiter|hr|talent acquisition)$/i;
+const ROLE_PHRASE_RE =
+  /^(?:head|vp|director|chief|founding)\s+(?:of|engineering|product|technology|data|design|growth|marketing|sales|operations|people|talent|ai|ml)\b|\b(?:manager|engineer|lead|recruiter)$/i;
 const NOT_AN_EMPLOYER_RE = /\b(?:across|team|university|college)\b/i;
 
 export function isKnownCompany(company: string | null | undefined): company is string {
@@ -34,7 +36,7 @@ export function isKnownCompany(company: string | null | undefined): company is s
   if (NOT_AN_EMPLOYER_RE.test(name)) return false;
   // Headlines join roles with "&", ",", "/", "|", "·", " - " or "and".
   const parts = name.split(/\s*(?:[&,/|·]|\s-\s|\band\b)\s*/i).filter(Boolean);
-  return !parts.every((part) => ROLE_WORD_RE.test(part));
+  return !parts.every((part) => ROLE_WORD_RE.test(part) || ROLE_PHRASE_RE.test(part));
 }
 
 /** title-company-city-id, e.g. senior-backend-engineer-razorpay-bengaluru-42. */
