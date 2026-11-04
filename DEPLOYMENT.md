@@ -333,7 +333,9 @@ Client-side components (like `submit/page.tsx` and `UpvoteButton.tsx`) can only 
 
 ## Redeploy After Changes
 
-After updating env vars or code changes:
+Merges to `main` now auto-deploy backend then frontend via `.github/workflows/deploy.yml` (remote Vercel builds with each project's stored env); Prisma migrations remain a manual step (`npx prisma migrate deploy`) to run before merging schema changes.
+
+To redeploy by hand after updating env vars or code changes:
 
 ```bash
 # Frontend

@@ -5,56 +5,50 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Never run two production deploys at once; queue instead of cancelling a deploy mid-flight.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+# Remote builds: Vercel builds with the env vars stored on each project. We do not
+# `vercel pull` + `vercel build` here because the prod env vars are "sensitive" and
+# cannot be downloaded, so a CI build would bake empty NEXT_PUBLIC_* values.
 jobs:
-  deploy-frontend:
-    name: Deploy Frontend to Vercel
-    runs-on: ubuntu-latest
-    needs: []
-    env:
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID_FRONTEND: ${{ secrets.VERCEL_PROJECT_ID_FRONTEND }}
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Vercel CLI
-        run: npm install -g vercel@latest
-
-      - name: Pull Vercel environment
-        working-directory: frontend
-        run: vercel pull --yes --environment=production --token=$VERCEL_TOKEN --org=$VERCEL_ORG_ID --project=$VERCEL_PROJECT_ID_FRONTEND
-
-      - name: Build
-        working-directory: frontend
-        run: vercel build --prod --token=$VERCEL_TOKEN --org=$VERCEL_ORG_ID --project=$VERCEL_PROJECT_ID_FRONTEND
-
-      - name: Deploy
-        working-directory: frontend
-        run: vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN --org=$VERCEL_ORG_ID --project=$VERCEL_PROJECT_ID_FRONTEND
-
   deploy-backend:
     name: Deploy Backend to Vercel
     runs-on: ubuntu-latest
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID_BACKEND: ${{ secrets.VERCEL_PROJECT_ID_BACKEND }}
-
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_BACKEND }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Vercel CLI
-        run: npm install -g vercel@latest
-
-      - name: Pull Vercel environment
-        working-directory: backend
-        run: vercel pull --yes --environment=production --token=$VERCEL_TOKEN --org=$VERCEL_ORG_ID --project=$VERCEL_PROJECT_ID_BACKEND
-
-      - name: Build
-        working-directory: backend
-        run: vercel build --prod --token=$VERCEL_TOKEN --org=$VERCEL_ORG_ID --project=$VERCEL_PROJECT_ID_BACKEND
-
       - name: Deploy
         working-directory: backend
-        run: vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN --org=$VERCEL_ORG_ID --project=$VERCEL_PROJECT_ID_BACKEND
+        run: npx --yes vercel@65 deploy --prod --yes --token "$VERCEL_TOKEN"
+
+      - name: Smoke test
+        run: curl -fsS --retry 5 --retry-delay 10 --retry-all-errors https://backend-umber-nu-43.vercel.app/health
+
+  deploy-frontend:
+    name: Deploy Frontend to Vercel
+    runs-on: ubuntu-latest
+    # Backend first, so a frontend that calls a new endpoint never goes live before it.
+    needs: deploy-backend
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_FRONTEND }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy
+        working-directory: frontend
+        run: npx --yes vercel@65 deploy --prod --yes --token "$VERCEL_TOKEN"
+
+      - name: Smoke test
+        run: curl -fsS --retry 5 --retry-delay 10 --retry-all-errors -o /dev/null https://skiptheboard.in/
