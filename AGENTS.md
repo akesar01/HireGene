@@ -84,6 +84,8 @@ Email nudges: `runCampaign` in `backend/src/lib/nudge-send.ts` -> `selectJobsFor
 
 Frontend config (`frontend/src/lib/config.ts`) centralizes `BACKEND_URL` and `API_KEY` — all client-side fetches import from there.
 
+Latency: Postgres is in Singapore, so both projects pin functions to `sin1` in their `vercel.json`; never move one without the other. The anonymous feed is cached 60s (frontend `feedRequestInit`, backend `Cache-Control` on `/api/posts/recent`); anything carrying a user token must stay uncached. DB URL shape is under "Region and database connection" in `DEPLOYMENT.md`. Tests: `npm test` (vitest) in both `backend/` and `frontend/`.
+
 ## Deployment (Vercel)
 
 Both frontend and backend are deployed on Vercel.

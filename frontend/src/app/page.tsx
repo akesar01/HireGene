@@ -44,32 +44,17 @@ export default async function Home({
   const company = parseString(params.company);
   const appliedOnly = params.applied_only === "true";
 
-  // Check if user is logged in and has a profile
+  // Check if user is logged in
   const session = await auth();
-  let userProfile: ResumeProfile | null = null;
   let usingProfileFilters = false;
   let authToken: string | null = null;
   if (session?.userId) {
     try {
       authToken = await session.getToken();
-      if (authToken) {
-        userProfile = await getProfile(authToken);
-      }
     } catch {
-      // Profile fetch failed — continue without personalization
+      // Token fetch failed — continue anonymously
     }
   }
-
-  // Personalization is based on MATCH-SCORE RANKING, not hard filtering.
-  // We never restrict the feed by profile attributes (that empties the feed).
-  // Instead: fetch all jobs honoring only explicit URL filters, then rank by match.
-  const hasUrlFilters = !!(country || roleFamily || seniority || remoteMode || company);
-  const hasProfile = !!userProfile?.filterSummary;
-
-  // Personalized ranking active only when logged-in user has a profile
-  // AND hasn't manually applied URL filters (URL filters take precedence).
-  const personalizedRanking = hasProfile && !hasUrlFilters;
-  usingProfileFilters = personalizedRanking;
 
   const feedFilters: FilterParams = {
     source: "all",
@@ -81,14 +66,29 @@ export default async function Home({
     appliedOnly,
   };
 
-  let allJobs;
-  try {
-    allJobs = excludeExpiredJobs(
-      await fetchJobs("new", feedFilters, authToken ?? undefined),
-    );
-  } catch {
-    allJobs = mockJobs;
-  }
+  // Profile and feed are independent, so fetch them in parallel.
+  const [userProfile, allJobs] = await Promise.all([
+    authToken
+      ? getProfile(authToken).catch((): ResumeProfile | null => {
+          // Profile fetch failed — continue without personalization
+          return null;
+        })
+      : Promise.resolve(null),
+    fetchJobs("new", feedFilters, authToken ?? undefined)
+      .then((jobs) => excludeExpiredJobs(jobs))
+      .catch(() => mockJobs),
+  ]);
+
+  // Personalization is based on MATCH-SCORE RANKING, not hard filtering.
+  // We never restrict the feed by profile attributes (that empties the feed).
+  // Instead: fetch all jobs honoring only explicit URL filters, then rank by match.
+  const hasUrlFilters = !!(country || roleFamily || seniority || remoteMode || company);
+  const hasProfile = !!userProfile?.filterSummary;
+
+  // Personalized ranking active only when logged-in user has a profile
+  // AND hasn't manually applied URL filters (URL filters take precedence).
+  const personalizedRanking = hasProfile && !hasUrlFilters;
+  usingProfileFilters = personalizedRanking;
 
   const matchScores: Record<string, number> = {};
   if (userProfile?.filterSummary) {

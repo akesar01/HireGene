@@ -8,6 +8,8 @@ type Variables = {
 
 const posts = new Hono<{ Variables: Variables }>();
 
+export const ANONYMOUS_FEED_CACHE_CONTROL = "public, s-maxage=60, stale-while-revalidate=300";
+
 // Auth middleware — require API_KEY for read endpoints
 // Vote endpoint is public (no API key needed)
 posts.use("/recent", async (c, next) => {
@@ -76,6 +78,17 @@ posts.get("/recent", async (c) => {
     orderBy,
     include: { recruiter: { select: { linkedinUrl: true } } },
   });
+
+  // Anonymous feeds are identical for everyone, so let the CDN share them for
+  // 60s. Vercel's CDN never caches requests that carry an Authorization header,
+  // and anything sent with one is marked private here as well.
+  if (c.req.header("Authorization")) {
+    c.header("Cache-Control", "private, no-store");
+  } else {
+    c.header("Cache-Control", ANONYMOUS_FEED_CACHE_CONTROL);
+    // Key cached entries by API key so the CDN never answers a keyless request.
+    c.header("Vary", "x-api-key", { append: true });
+  }
 
   return c.json({
     jobs: jobs.map((job) => ({
