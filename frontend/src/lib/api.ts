@@ -22,6 +22,26 @@ function buildQueryString(
   return params.toString();
 }
 
+/** Seconds the anonymous feed is reused from the Next.js data cache. */
+export const ANONYMOUS_FEED_REVALIDATE_SECONDS = 60;
+
+/**
+ * The anonymous feed is the same for everyone, so it is cached for 60s.
+ * A signed-in request carries the user's token and is never cached or shared.
+ */
+export function feedRequestInit(apiKey: string, authToken?: string): RequestInit {
+  if (authToken) {
+    return {
+      headers: { "x-api-key": apiKey, Authorization: `Bearer ${authToken}` },
+      cache: "no-store",
+    };
+  }
+  return {
+    headers: { "x-api-key": apiKey },
+    next: { revalidate: ANONYMOUS_FEED_REVALIDATE_SECONDS },
+  };
+}
+
 export async function fetchJobs(
   sort: SortOption,
   filters: FilterParams,
@@ -32,12 +52,10 @@ export async function fetchJobs(
   }
 
   const qs = buildQueryString(sort, filters);
-  const headers: Record<string, string> = { "x-api-key": API_KEY };
-  if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
-
-  const res = await fetch(`${BACKEND_URL}/api/posts/recent?${qs}`, {
-    headers,
-  });
+  const res = await fetch(
+    `${BACKEND_URL}/api/posts/recent?${qs}`,
+    feedRequestInit(API_KEY, authToken),
+  );
 
   if (!res.ok) {
     throw new Error(`Feed API returned ${res.status}: ${await res.text()}`);

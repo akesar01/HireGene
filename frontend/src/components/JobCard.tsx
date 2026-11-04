@@ -5,6 +5,7 @@ import MatchBadge from "./MatchBadge";
 import AppliedButton from "./AppliedButton";
 import MessageButton from "./MessageButton";
 import ConnectNoteButton from "./ConnectNoteButton";
+import AuthorAvatar from "./AuthorAvatar";
 
 interface JobCardProps {
   job: Job;
@@ -23,20 +24,7 @@ export default function JobCard({ job, matchScore, matchReason }: JobCardProps) 
         <div className="flex-1 min-w-0">
           {/* Author header */}
           <div className="flex items-center gap-2.5">
-            {job.authorAvatar ? (
-              // LinkedIn CDN avatars need native img + referrerPolicy.
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={job.authorAvatar}
-                alt={job.author}
-                className="w-7 h-7 rounded-full object-cover shrink-0"
-                referrerPolicy="no-referrer"
-              />
-            ) : (
-              <div className="w-7 h-7 rounded-full bg-surface flex items-center justify-center text-xs font-bold text-muted shrink-0">
-                {job.author.charAt(0)}
-              </div>
-            )}
+            <AuthorAvatar src={job.authorAvatar} name={job.author} />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-foreground truncate">{job.author}</p>
               <p className="text-xs text-muted truncate">{job.authorTitle}</p>

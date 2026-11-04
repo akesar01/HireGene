@@ -118,6 +118,25 @@ npx vercel env add FRONTEND_URL production
 
 `CLERK_SECRET_KEY` and `MONGODB_URI` are already required for sign-in and profiles; the nudges reuse them for recipient emails and resume profiles.
 
+### Region and database connection
+
+Postgres (Supabase) is in Singapore, so both Vercel projects pin their functions to `sin1` (`"regions": ["sin1"]` in `backend/vercel.json` and `frontend/vercel.json`). Hobby allows exactly one function region, and any region may be chosen. Keep the two projects in the same region as the database: from `iad1` every database round trip costs about 230 ms, and moving only one project makes the frontend→backend hop cross the Pacific instead.
+
+Recommended `DATABASE_URL`: the Supabase **session pooler** on port 5432, **without** `pgbouncer=true`, with `connection_limit=5`:
+
+```
+postgresql://postgres.<project-ref>:<password>@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?connection_limit=5
+```
+
+- `pgbouncer=true` is only for the transaction pooler (port 6543). On the session pooler it just makes Prisma wrap every query in extra `DEALLOCATE ALL` / `BEGIN` / `COMMIT` round trips.
+- `connection_limit=1` makes parallel queries in a request, and concurrent requests on one Fluid instance, queue on a single connection. Use 3–5. When the URL has no `connection_limit`, `backend/src/lib/db-url.ts` adds `connection_limit=5`; an explicit value is kept. It also logs a `[Prisma]` warning at startup for `pgbouncer=true` on port 5432 and for `connection_limit=1`.
+- Each warm instance holds up to `connection_limit` session-pooler connections, so watch the Supabase session pool size if traffic grows.
+- The Prisma schema has no `directUrl`; migrations run against `DATABASE_URL`, which works on the session pooler. If a `DIRECT_URL` is ever added for migrations, keep it pointing at the direct database host.
+
+### Feed caching
+
+The anonymous home feed is cached for 60 s in two places. The frontend's `fetchJobs` (`frontend/src/lib/api.ts`) uses `next: { revalidate: 60 }` when there is no user token. `GET /api/posts/recent` without an `Authorization` header returns `Cache-Control: public, s-maxage=60, stale-while-revalidate=300` with `Vary: x-api-key`. Signed-in requests use `cache: "no-store"` on the frontend and `Cache-Control: private, no-store` on the backend, and Vercel's CDN never caches a request that carries `Authorization`. A new or expired job can therefore take up to about a minute to appear or disappear for anonymous visitors.
+
 **`CORS_ORIGIN`** must be a comma-separated list of allowed origins:
 
 ```
