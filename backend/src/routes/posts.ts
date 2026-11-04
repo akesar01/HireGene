@@ -1,6 +1,9 @@
-import { Hono } from "hono";
+import { Hono, type Context, type Next } from "hono";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
-import { activeJobWhere } from "../lib/job-expiry.js";
+import { activeJobWhere, computeExpiresAt, isJobExpired } from "../lib/job-expiry.js";
+import { jobFacts } from "../lib/job-facts.js";
+import { effectiveSeniority, levelLabel, posterKind, remoteLabel } from "../lib/nudge-select.js";
 
 type Variables = {
   userId: string | null;
@@ -9,16 +12,49 @@ type Variables = {
 const posts = new Hono<{ Variables: Variables }>();
 
 export const ANONYMOUS_FEED_CACHE_CONTROL = "public, s-maxage=60, stale-while-revalidate=300";
+/** One job's public page data; the same for every caller. */
+export const JOB_DETAIL_CACHE_CONTROL = "public, s-maxage=300, stale-while-revalidate=600";
 
 // Auth middleware — require API_KEY for read endpoints
 // Vote endpoint is public (no API key needed)
-posts.use("/recent", async (c, next) => {
+const requireApiKey = async (c: Context, next: Next) => {
   const apiKey = c.req.header("x-api-key");
   if (!apiKey || apiKey !== process.env.API_KEY) {
     return c.json({ error: "Unauthorized" }, 401);
   }
   await next();
-});
+};
+posts.use("/recent", requireApiKey);
+posts.use("/:id{[0-9]+}", requireApiKey);
+
+type FeedJobRow = Prisma.JobGetPayload<{ include: { recruiter: { select: { linkedinUrl: true } } } }>;
+
+/** The feed's view of a job; also the base of the single-job response. */
+function feedJob(job: FeedJobRow) {
+  return {
+    id: job.id,
+    title: job.title,
+    company: job.company,
+    author: job.author,
+    authorTitle: job.authorTitle,
+    authorAvatar: job.authorAvatar,
+    authorProfileUrl: job.recruiter.linkedinUrl,
+    roleBadge: job.roleBadge,
+    source: job.source,
+    sourceUrl: job.sourceUrl,
+    roleFamily: job.roleFamily,
+    seniority: job.seniority,
+    remoteMode: job.remoteMode,
+    stack: job.stack,
+    description: job.description,
+    // Cities named in the post; the frontend puts the first one in the job URL.
+    locations: jobFacts(job).locations,
+    comments: job.commentCount,
+    score: job.score,
+    postedAt: job.postedAt.toISOString(),
+    createdAt: job.createdAt.toISOString(),
+  };
+}
 
 // Map hyphenated frontend values to DB enum values
 function mapToEnum(value: string): string {
@@ -91,28 +127,39 @@ posts.get("/recent", async (c) => {
   }
 
   return c.json({
-    jobs: jobs.map((job) => ({
-      id: job.id,
-      title: job.title,
-      company: job.company,
-      author: job.author,
-      authorTitle: job.authorTitle,
-      authorAvatar: job.authorAvatar,
-      authorProfileUrl: job.recruiter.linkedinUrl,
-      roleBadge: job.roleBadge,
-      source: job.source,
-      sourceUrl: job.sourceUrl,
-      roleFamily: job.roleFamily,
-      seniority: job.seniority,
-      remoteMode: job.remoteMode,
-      stack: job.stack,
-      description: job.description,
-      comments: job.commentCount,
-      score: job.score,
-      postedAt: job.postedAt.toISOString(),
-      createdAt: job.createdAt.toISOString(),
-    })),
+    jobs: jobs.map(feedJob),
     count: jobs.length,
+  });
+});
+
+// GET /api/posts/:id — one job for its public page. Expired jobs that are not
+// purged yet still answer, flagged expired, so the page can drop them from search.
+posts.get("/:id{[0-9]+}", async (c) => {
+  const id = Number(c.req.param("id"));
+  const job = await prisma.job.findUnique({
+    where: { id },
+    include: { recruiter: { select: { linkedinUrl: true } } },
+  });
+  if (!job) {
+    c.header("Cache-Control", "public, s-maxage=60");
+    return c.json({ error: "Job not found" }, 404);
+  }
+
+  const facts = jobFacts(job);
+  const seniority = effectiveSeniority(job);
+  c.header("Cache-Control", JOB_DETAIL_CACHE_CONTROL);
+  c.header("Vary", "x-api-key", { append: true });
+  return c.json({
+    job: {
+      ...feedJob(job),
+      country: facts.country,
+      employmentTypes: facts.employmentTypes,
+      posterKind: posterKind(job.authorTitle),
+      levelLabel: levelLabel(seniority),
+      remoteLabel: remoteLabel(job.remoteMode),
+      expiresAt: computeExpiresAt(job.postedAt).toISOString(),
+      expired: isJobExpired(job.postedAt),
+    },
   });
 });
 

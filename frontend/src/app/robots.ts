@@ -1,13 +1,14 @@
 import type { MetadataRoute } from "next";
+import { SITE_URL } from "@/lib/config";
 
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: {
       userAgent: "*",
-      allow: "/",
+      allow: ["/", "/jobs/"],
       disallow: ["/api/", "/admin"],
     },
-    sitemap: "https://skiptheboard.in/sitemap.xml",
-    host: "https://skiptheboard.in",
+    sitemap: `${SITE_URL}/sitemap.xml`,
+    host: SITE_URL,
   };
 }

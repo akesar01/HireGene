@@ -1,5 +1,5 @@
 import { BACKEND_URL, API_KEY } from "./config";
-import { excludeExpiredJobs, type Job, type FilterParams, type SortOption } from "./data";
+import { excludeExpiredJobs, type Job, type JobDetail, type FilterParams, type SortOption } from "./data";
 
 interface FeedResponse {
   jobs: Job[];
@@ -63,4 +63,26 @@ export async function fetchJobs(
 
   const data = (await res.json()) as FeedResponse;
   return excludeExpiredJobs(data.jobs);
+}
+
+/** Seconds a job page's data is reused; the page itself revalidates on the same clock. */
+export const JOB_PAGE_REVALIDATE_SECONDS = 300;
+
+/** One job for its public page, or null when it does not exist (or was purged). */
+export async function fetchJobDetail(id: number): Promise<JobDetail | null> {
+  if (!API_KEY) {
+    throw new Error("API_KEY is not set — cannot fetch from backend");
+  }
+
+  const res = await fetch(`${BACKEND_URL}/api/posts/${id}`, {
+    headers: { "x-api-key": API_KEY },
+    next: { revalidate: JOB_PAGE_REVALIDATE_SECONDS },
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    throw new Error(`Job API returned ${res.status}: ${await res.text()}`);
+  }
+
+  const data = (await res.json()) as { job: JobDetail };
+  return data.job;
 }

@@ -262,6 +262,26 @@ npx tsx scripts/reclassify-jobs.ts --apply    # delete failing rows (plus their 
 
 ---
 
+## Job pages and Google for Jobs
+
+Every job has a public page at `/jobs/<title>-<company>-<city>-<id>` (`frontend/src/app/jobs/[slug]/page.tsx`). Only the trailing id is read; any other slug for that id answers 308 to the canonical one. The page data comes from `GET /api/posts/:id` (API key, `Cache-Control: public, s-maxage=300`), and the page itself is ISR: rendered on first visit, then refreshed every 5 minutes. `/jobs/` is excluded from the Clerk proxy matcher in `frontend/src/proxy.ts`, so these pages never touch Clerk on the server. Feed cards link their title to the page and keep the "view original post" link.
+
+- **Facts from the post text.** Jobs have no location or employment-type column. `backend/src/lib/job-facts.ts` reads the cities (Indian cities only, college names like "IIT Delhi" ignored), the applicant country, and full-time / part-time / contract / internship from the title, bullets and stored post text. Unknown stays empty. The feed also returns `locations` so card links and the sitemap use the same slug as the page.
+- **Structured data.** `buildJobPostingJsonLd` in `frontend/src/lib/job-seo.ts` emits a `JobPosting` only for an unexpired job with a known company and a location: cities as `jobLocation`, or `TELECOMMUTE` plus `applicantLocationRequirements` for remote jobs whose post points at India. `validThrough` is `postedAt + JOB_EXPIRY_DAYS`. The description is our own summary plus the extracted bullets, never the full post text.
+- **Expired jobs.** Until the daily purge deletes them, expired jobs render with `noindex` and no structured data. Purged or unknown ids return 404.
+- **Sitemap.** `sitemap.xml` lists every live job with `lastmod` = capture time; `robots.txt` allows `/jobs/`.
+- **Deploy order.** Deploy the backend first. Without `GET /api/posts/:id` every job page returns 404.
+
+### Search Console setup (one time, by the captain)
+
+1. Open [Google Search Console](https://search.google.com/search-console), **Add property**, choose **Domain**, enter `skiptheboard.in`. Copy the `google-site-verification=...` TXT value it shows.
+2. skiptheboard.in uses Vercel's nameservers, so add the record in **Vercel → Domains → skiptheboard.in → DNS Records** (not GoDaddy): type `TXT`, name `@` (blank), value the copied string. Or run `npx vercel dns add skiptheboard.in @ TXT "google-site-verification=..."`. Then click **Verify** in Search Console; DNS can take a few minutes.
+3. In the property, **Sitemaps → Add a new sitemap**: `https://skiptheboard.in/sitemap.xml`. Status should become "Success" with the job URLs discovered.
+4. Pick one live job URL from the sitemap and run it through the [Rich Results Test](https://search.google.com/test/rich-results). Expect a valid **Job posting** item. A job with an unknown company or no stated location shows none, by design.
+5. Optional: **URL Inspection** on the same URL, then **Request indexing**.
+
+---
+
 ## Backend Deployment — Gotchas & Fixes
 
 ### 1. `build` script must NOT be `vercel build`

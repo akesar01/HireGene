@@ -27,10 +27,33 @@ export interface Job {
   remoteMode: RemoteMode;
   stack: TechStack[];
   description: string[];
+  /** Cities the post names (backend `job-facts.ts`); absent on mock jobs. */
+  locations?: JobLocation[];
   comments: number;
   score: number;
   postedAt: string;
   createdAt?: string;
+}
+
+export interface JobLocation {
+  city: string;
+  region: string;
+  country: "IN";
+}
+
+export type EmploymentType = "FULL_TIME" | "PART_TIME" | "CONTRACTOR" | "INTERN";
+
+/** GET /api/posts/:id — one job plus what its public page needs. */
+export interface JobDetail extends Job {
+  locations: JobLocation[];
+  /** Country applicants must be in, when the post points at one. */
+  country: "IN" | null;
+  employmentTypes: EmploymentType[];
+  posterKind: string;
+  levelLabel: string;
+  remoteLabel: string;
+  expiresAt: string;
+  expired: boolean;
 }
 
 export type JobCountry = "india" | "us";
@@ -525,7 +548,7 @@ export function getTagCounts(jobList: Job[], field: keyof Job): TagCount[] {
     const val = job[field];
     if (Array.isArray(val)) {
       for (const v of val) {
-        counts[v] = (counts[v] || 0) + 1;
+        if (typeof v === "string") counts[v] = (counts[v] || 0) + 1;
       }
     } else if (typeof val === "string") {
       counts[val] = (counts[val] || 0) + 1;

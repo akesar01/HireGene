@@ -1,5 +1,8 @@
 // ─── App-wide configuration ──────────────────────────────────────────────────
 
+/** Public site origin (no trailing slash): canonical URLs, sitemap, structured data. */
+export const SITE_URL = "https://skiptheboard.in";
+
 /** Job posts auto-expire after this many days. Shared between frontend and backend. */
 export const JOB_EXPIRY_DAYS = 30;
 
