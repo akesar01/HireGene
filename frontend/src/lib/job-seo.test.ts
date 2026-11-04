@@ -154,6 +154,10 @@ describe("buildJobPostingJsonLd", () => {
       "Founder",
       "CEO",
       "Founder & CEO",
+      "Founder | CEO",
+      "Co-Founder · CTO",
+      "Founder - CEO",
+      "CEO/Founder",
       "my team",
       "Thoughtworks India across Engineering",
       "Bharathiyar university",
@@ -164,7 +168,7 @@ describe("buildJobPostingJsonLd", () => {
       expect(isKnownCompany(company), company).toBe(false);
       expect(buildJobPostingJsonLd(detail({ company }), NOW), company).toBeNull();
     }
-    for (const company of ["Razorpay", "IITBase", "UST", "Thoughtworks", "EPAM Systems", "Founders Fund"]) {
+    for (const company of ["Razorpay", "IITBase", "UST", "Thoughtworks", "EPAM Systems", "Founders Fund", "Hewlett-Packard", "Tata Consultancy Services"]) {
       expect(isKnownCompany(company), company).toBe(true);
     }
   });

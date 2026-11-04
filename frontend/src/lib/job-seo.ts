@@ -32,7 +32,8 @@ export function isKnownCompany(company: string | null | undefined): company is s
   if (name === "" || name.toLowerCase() === "unknown") return false;
   if (name.replace(/[^\p{L}\p{N}]/gu, "").length <= 2) return false;
   if (NOT_AN_EMPLOYER_RE.test(name)) return false;
-  const parts = name.split(/\s*(?:&|,|\/|\band\b)\s*/i).filter(Boolean);
+  // Headlines join roles with "&", ",", "/", "|", "·", " - " or "and".
+  const parts = name.split(/\s*(?:[&,/|·]|\s-\s|\band\b)\s*/i).filter(Boolean);
   return !parts.every((part) => ROLE_WORD_RE.test(part));
 }
 
