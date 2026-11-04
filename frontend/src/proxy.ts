@@ -6,9 +6,11 @@ export default clerkMiddleware(async (_auth, _request) => {
   // and useAuth() in client components.
 });
 
+// Job pages (/jobs/...) skip Clerk: they are public, identical for every
+// visitor, and served from the ISR cache.
 export const config = {
   matcher: [
-    "/((?!_next|opengraph-image|twitter-image|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    "/((?!_next|jobs/|opengraph-image|twitter-image|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
     "/(api|trpc)(.*)",
   ],
 };

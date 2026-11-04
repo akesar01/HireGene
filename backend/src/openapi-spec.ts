@@ -56,6 +56,14 @@ function buildOpenApiSpec(baseUrl: string) {
           remoteMode: { type: "string" },
           stack: { type: "array", items: { type: "string" } },
           description: { type: "array", items: { type: "string" } },
+          locations: {
+            type: "array",
+            description: "Cities the post names, in order of first mention",
+            items: {
+              type: "object",
+              properties: { city: { type: "string" }, region: { type: "string" }, country: { type: "string", enum: ["IN"] } },
+            },
+          },
           comments: { type: "integer" },
           score: { type: "integer" },
           postedAt: { type: "string", format: "date-time" },
@@ -281,6 +289,23 @@ function buildOpenApiSpec(baseUrl: string) {
             content: { "application/json": { schema: { type: "object", properties: { jobs: { type: "array", items: { $ref: "#/components/schemas/Job" } }, count: { type: "integer" } } } } },
           },
           "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
+        },
+      },
+    },
+    "/api/posts/{id}": {
+      get: {
+        summary: "Get one job for its public page",
+        description:
+          "Adds facts read from the post text (cities, applicant country, employment types), poster and level labels, and the expiry. Expired jobs not yet purged answer with expired: true.",
+        security: [{ ApiKey: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" } }],
+        responses: {
+          "200": {
+            description: "The job",
+            content: { "application/json": { schema: { type: "object", properties: { job: { $ref: "#/components/schemas/Job" } } } } },
+          },
+          "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
+          "404": { description: "Job not found", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
         },
       },
     },

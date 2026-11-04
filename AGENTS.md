@@ -82,7 +82,9 @@ Ingest path: `ingestPosts` in `backend/src/lib/apify.ts` -> `classifyPost` (`llm
 
 Email nudges: `runCampaign` in `backend/src/lib/nudge-send.ts` -> `selectJobsForUser` (`nudge-select.ts`, pure: re-applies `evaluateJobGates`, lifts SDE-3/5+ year roles to senior, excludes jobs already sent) -> `renderNudgeEmail` (`nudge-render.ts`, plain HTML + text; momentum lines use real counts from `loadJobSignals`, never estimates) -> `EmailProvider` (`email.ts`, Resend or dry run without `RESEND_API_KEY`). Recipients are Clerk users with a Mongo profile; their emails come from Clerk, never from the resume. Admin access is `ADMIN_USER_IDS` / `ADMIN_EMAILS` (`admin-auth.ts`); the dashboard at `frontend/src/app/admin/` never sees `ADMIN_SECRET`. Operations, env vars, DNS and the cron list are under "Match-based email nudges" in `DEPLOYMENT.md`. Tests mock Prisma with `backend/tests/helpers/fake-prisma.ts`.
 
-Frontend config (`frontend/src/lib/config.ts`) centralizes `BACKEND_URL` and `API_KEY` — all client-side fetches import from there.
+Frontend config (`frontend/src/lib/config.ts`) centralizes `SITE_URL`, `BACKEND_URL` and `API_KEY` — all client-side fetches import from there.
+
+Job pages (SEO / Google for Jobs): `/jobs/[slug]` is public ISR, outside the Clerk proxy matcher, fed by `GET /api/posts/:id`. Location and employment type are not columns; they are read from post text by `backend/src/lib/job-facts.ts`. Slugs, page text and `JobPosting` JSON-LD live in `frontend/src/lib/job-seo.ts`, which must only emit facts we hold (no JSON-LD without company + location, none for expired jobs) and never republish the raw post. Details and Search Console steps: "Job pages and Google for Jobs" in `DEPLOYMENT.md`.
 
 Latency: Postgres is in Singapore, so both projects pin functions to `sin1` in their `vercel.json`; never move one without the other. The anonymous feed is cached 60s (frontend `feedRequestInit`, backend `Cache-Control` on `/api/posts/recent`); anything carrying a user token must stay uncached. DB URL shape is under "Region and database connection" in `DEPLOYMENT.md`. Tests: `npm test` (vitest) in both `backend/` and `frontend/`.
 

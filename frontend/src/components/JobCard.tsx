@@ -1,4 +1,6 @@
+import Link from "next/link";
 import type { Job } from "@/lib/data";
+import { jobPath } from "@/lib/job-seo";
 import { timeAgo } from "@/lib/data";
 import UpvoteButton from "./UpvoteButton";
 import MatchBadge from "./MatchBadge";
@@ -40,7 +42,9 @@ export default function JobCard({ job, matchScore, matchReason }: JobCardProps) 
           {/* Job title + match badge */}
           <div className="mt-3 flex items-center gap-2 flex-wrap">
             <h3 className="text-base font-bold text-foreground leading-snug">
-              {job.title}
+              <Link href={jobPath(job)} prefetch={false} className="hover:text-accent transition-colors">
+                {job.title}
+              </Link>
             </h3>
             {matchScore !== undefined && (
               <MatchBadge score={matchScore} reason={matchReason} />
